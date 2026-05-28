@@ -60,7 +60,7 @@ body.light .sidebar {
 }
 
 /* =========================
-   SIDEBAR VIDEO (FIXED)
+   SIDEBAR VIDEO (FIXED FINAL)
 ========================= */
 
 .sidebar-video {
@@ -72,23 +72,22 @@ body.light .sidebar {
 
     z-index: 0;
     pointer-events: none;
-
     transition: 0.3s;
 }
 
-/* 🌙 DARK MODE VIDEO LOOK */
+/* DARK MODE VIDEO */
 body.dark .sidebar-video {
-    opacity: 0.45;
-    filter: brightness(0.7) contrast(1.1);
+    opacity: 0.55;
+    filter: brightness(0.75) contrast(1.2);
 }
 
-/* 🌞 LIGHT MODE VIDEO LOOK (CLEAR FIX) */
+/* LIGHT MODE VIDEO (FIXED VISIBILITY) */
 body.light .sidebar-video {
-    opacity: 0.95;
-    filter: brightness(1.05) contrast(1.2) saturate(1.1);
+    opacity: 0.85;
+    filter: brightness(1.15) contrast(1.35) saturate(1.2);
 }
 
-/* OVERLAY CONTROL */
+/* SIDEBAR OVERLAY (BALANCED FIX) */
 
 .sidebar::after {
     content: "";
@@ -100,12 +99,12 @@ body.light .sidebar-video {
 
 /* DARK overlay */
 body.dark .sidebar::after {
-    background: rgba(0, 0, 0, 0.25);
+    background: rgba(0, 0, 0, 0.35);
 }
 
-/* LIGHT overlay (very light so video stays clear) */
+/* LIGHT overlay (very subtle so video stays visible) */
 body.light .sidebar::after {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.08);
 }
 
 /* KEEP CONTENT ABOVE VIDEO */
@@ -128,6 +127,13 @@ body.light .sidebar::after {
 
 .logo-row h2 {
     color: #38bdf8;
+    font-weight: 800;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+
+body.light .logo-row h2 {
+    color: #0ea5e9;
+    text-shadow: 0 2px 10px rgba(255,255,255,0.6);
 }
 
 /* THEME BUTTON */
@@ -239,7 +245,7 @@ body.light .chat-container::before {
     inset: 0;
     background: url("Assets/bg.png") center center/cover no-repeat;
     opacity: 1;
-    filter: contrast(1.15) brightness(0.95);
+    filter: contrast(1.2) brightness(1.05);
     z-index: 0;
 }
 
@@ -306,7 +312,6 @@ body.light #chat {
 body.dark .message {
     background: rgba(30, 30, 30, 0.95);
     backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 body.light .message {
@@ -321,6 +326,10 @@ body.light .message {
     display: block;
     margin-bottom: 5px;
     font-weight: 700;
+}
+
+body.light .message strong {
+    color: #0284c7;
 }
 
 /* SELF MESSAGE */
