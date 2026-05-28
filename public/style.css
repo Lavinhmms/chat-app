@@ -4,7 +4,7 @@
     box-sizing: border-box;
 }
 
-/* ✅ FIX: REAL MOBILE VIEWPORT SUPPORT */
+/* GLOBAL MOBILE SAFE HEIGHT FIX */
 html, body {
     height: 100%;
     height: 100dvh;
@@ -30,13 +30,15 @@ body.light {
     color: #111827;
 }
 
-/* APP */
+/* APP (IMPORTANT FIX) */
 
 .app {
     display: flex;
     height: 100%;
     height: 100dvh;
     width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* SIDEBAR */
@@ -48,7 +50,6 @@ body.light {
     flex-direction: column;
     border-right: 1px solid;
     transition: 0.3s;
-
     position: relative;
     overflow: hidden;
 }
@@ -65,7 +66,6 @@ body.dark .sidebar {
 body.light .sidebar {
     background: rgba(255, 255, 255, 0.05);
     border-color: #cbd5e1;
-    backdrop-filter: blur(1px);
 }
 
 /* SIDEBAR VIDEO */
@@ -208,7 +208,7 @@ form {
     border-bottom: 1px solid;
 }
 
-/* CHAT */
+/* CHAT AREA */
 
 #chat {
     flex: 1;
@@ -219,7 +219,7 @@ form {
     gap: 12px;
 }
 
-/* MESSAGES */
+/* MESSAGE */
 
 .message {
     max-width: 70%;
@@ -227,7 +227,7 @@ form {
     border-radius: 16px;
 }
 
-/* SELF */
+/* SELF MESSAGE */
 
 .self {
     align-self: flex-end;
@@ -260,32 +260,37 @@ button {
 }
 
 /* =========================
-   📱 MOBILE FIX (FINAL STABLE VERSION)
+   📱 MOBILE FIX (FINAL WORKING VERSION)
 ========================= */
 
 @media (max-width: 768px) {
 
     .app {
         flex-direction: column;
+        height: 100vh;
+        height: 100dvh;
     }
 
     .sidebar {
         width: 100%;
-        height: 140px;
+        height: 160px;
         flex-direction: row;
         align-items: center;
-        gap: 10px;
+        justify-content: space-between;
         padding: 10px;
+        flex: none;
     }
 
     .logo-row {
-        margin-bottom: 0;
         flex-direction: column;
+        margin-bottom: 0;
         gap: 5px;
+        min-width: 90px;
     }
 
     .profile-box {
         flex: 1;
+        min-width: 120px;
     }
 
     .online-section {
@@ -293,12 +298,14 @@ button {
     }
 
     .chat-container {
-        height: calc(100dvh - 140px);
-        flex: none;
+        height: calc(100dvh - 160px);
+        flex: 1;
+        min-height: 0;
     }
 
     #chat {
         padding: 10px;
+        min-height: 0;
     }
 
     .message {
