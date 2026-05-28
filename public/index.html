@@ -1,31 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>Chat App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huba Huba</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<h1>Chat App</h1>
+    <div class="app">
 
-<div style="display:flex; gap:20px;">
-    <div id="chat"></div>
+        <!-- Sidebar -->
+        <div class="sidebar">
 
-    <div>
-        <h3>Online Users</h3>
-        <ul id="users"></ul>
+            <video autoplay muted loop playsinline class="sidebar-video">
+                <source src="assets/bg3.mp4" type="video/mp4">
+            </video>
+            
+            <div class="logo-row">
+                <h2>Huba Huba</h2>
+                <button id="themeToggle">◐</button>
+            </div>
+
+            <div class="profile-box">
+                <input id="username" placeholder="Enter your name" autocomplete="off" />
+            </div>
+
+            <div class="online-section">
+                <h3>Online Users</h3>
+                <ul id="users"></ul>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-container">
+
+            <div class="chat-header">
+                <h2>Huba Hmmss</h2>
+            </div>
+
+            <div id="chat"></div>
+
+            <form id="form">
+                <input id="input" placeholder="Type a message..." autocomplete="off" />
+                <button type="submit">➤</button>
+            </form>
+
+        </div>
+
     </div>
-</div>
 
-<form id="form">
-    <input id="username" placeholder="Your name" autocomplete="off" />
-    <input id="input" placeholder="Type message..." autocomplete="off" />
-    <button>Send</button>
-</form>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
 
 </body>
+
 </html>
