@@ -1,62 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Huba Huba</title>
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-    <div class="app">
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-       <!-- Sidebar -->
-<div class="sidebar">
+<div class="app">
 
-    <!-- 🎥 VIDEO BACKGROUND (FIXED PATH) -->
-    <video class="sidebar-video" autoplay muted loop playsinline>
-        <source src="/Assets/bg3.mp4" type="video/mp4">
-    </video>
-
-    <div class="logo-row">
-        <h2>Huba Huba</h2>
-        <button id="themeToggle">◐</button>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <video class="sidebar-video" autoplay muted loop playsinline>
+            <source src="/Assets/bg3.mp4" type="video/mp4">
+        </video>
+        <div class="logo-row">
+            <h2>Huba Huba</h2>
+            <button id="themeToggle">◐</button>
+        </div>
+        <div class="profile-box">
+           <input id="username" placeholder="Enter your name" autocomplete="off" autofocus />
+        </div>
     </div>
 
-    <div class="profile-box">
-        <input id="username" placeholder="Enter your name" autocomplete="off" />
-    </div>
+    <!-- Main Area -->
+    <div class="main-area">
 
-    <div class="online-section">
-        <h3>Online Users</h3>
-        <ul id="users"></ul>
-    </div>
-
-</div>
-
-        <!-- Chat Area -->
-        <div class="chat-container">
-
-            <div class="chat-header">
-                <h2>Huba Hmmss</h2>
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <button class="hamburger" id="hamburger" aria-label="Open menu">☰</button>
+            <div class="chat-header"><h2>Huba Hmmss</h2></div>
+            <!-- Top right menu -->
+            <div class="top-menu" id="topMenu">
+                <button class="top-menu-btn" id="topMenuBtn">≡</button>
+                <div class="top-menu-dropdown hidden" id="topMenuDropdown">
+                    <button id="exploreBtn" class="dropdown-item explore-item">🎬 Watch Together</button>
+                    <button id="callBtn"    class="dropdown-item call-item">📹 Call</button>
+                </div>
             </div>
-
-            <div id="chat"></div>
-
-            <form id="form">
-                <input id="input" placeholder="Type a message..." autocomplete="off" />
-                <button type="submit">➤</button>
-            </form>
-
         </div>
 
+        <!-- Content Area -->
+        <div class="content-area">
+
+            <!-- Chat -->
+            <div class="chat-container" id="chatSection">
+                <div class="chat-container-inner">
+                    <div id="chat"></div>
+                    <div id="typingIndicator"></div>
+                    <div id="emojiPicker" class="emoji-picker hidden">
+                        <div class="emoji-grid"></div>
+                    </div>
+                    <form id="form">
+                        <button type="button" id="emojiBtn">😊</button>
+                        <input id="input" placeholder="Type a message..." autocomplete="off" />
+                        <button type="submit">➤</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Watch Together Panel -->
+            <div class="video-panel hidden" id="videoPanel">
+                <div class="video-panel-header">
+                    <span>🎬 Watch Together</span>
+                    <button id="closeVideoBtn">✕</button>
+                </div>
+                <div class="video-url-bar">
+                    <input id="videoInput" placeholder="Paste YouTube link or search..." autocomplete="off" />
+                    <button id="loadVideoBtn">▶ Play</button>
+                </div>
+                <div id="searchResults" class="search-results hidden"></div>
+                <div class="video-wrapper">
+                    <div id="ytPlayer"></div>
+                    <div class="video-empty" id="videoEmpty">
+                        <div class="video-empty-icon">🎬</div>
+                        <div class="video-empty-title">Watch Together</div>
+                        <div class="video-empty-sub">Paste a YouTube link above or search for a video</div>
+                    </div>
+                </div>
+                <div class="video-status" id="videoStatus">No video loaded</div>
+            </div>
+
+        </div>
     </div>
+</div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
+<!-- Call Panel — Picture in Picture -->
+<div class="call-panel hidden" id="callPanel">
+    <div class="call-panel-header" id="callPanelHeader">
+        <span>📹 Group Call &nbsp;<span class="call-count" id="callCount">0 in call</span></span>
+        <div class="call-window-btns">
+            <button id="minimizeCallBtn" class="win-btn win-min" title="Minimize">−</button>
+            <button id="maximizeCallBtn" class="win-btn win-max" title="Maximize">□</button>
+            <button id="closeCallBtn"    class="win-btn win-close" title="Close">✕</button>
+        </div>
+    </div>
+    <!-- PIP row — collapsed small tiles -->
+    <div class="call-pip-row" id="callPipRow"></div>
+    <!-- Expanded grid -->
+    <div class="call-videos" id="callVideos"></div>
+    <!-- Controls — only shown when expanded -->
+    <div class="call-controls">
+        <button id="toggleMicBtn"    class="call-control-btn">🎤 Mute</button>
+        <button id="toggleCameraBtn" class="call-control-btn">📷 Camera Off</button>
+        <button id="joinCallBtn"     class="call-control-btn active">📹 Join Call</button>
+    </div>
+</div>
 
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script src="script.js"></script>
 </body>
-
 </html>
