@@ -105,9 +105,36 @@ io.on("connection", (socket) => {
         io.to(to).emit("call:ice-candidate", { from: socket.id, candidate });
     });
 
+    // ── Call ringing ────────────────────────────
+    socket.on("call:ring", (data) => {
+        socket.broadcast.emit("call:incoming", {
+            from: socket.id,
+            username: data.username
+        });
+    });
+
+    socket.on("call:cancel", () => {
+        socket.broadcast.emit("call:canceled");
+    });
+
+    socket.on("call:accept", (data) => {
+        io.to(data.to).emit("call:accepted", {
+            socketId: socket.id,
+            username: users[socket.id] || "Unknown"
+        });
+    });
+
+    socket.on("call:reject", (data) => {
+        io.to(data.to).emit("call:rejected", {
+            socketId: socket.id,
+            username: users[socket.id] || "Unknown"
+        });
+    });
+
     // ── Disconnect ────────────────────────────────
     socket.on("disconnect", () => {
         delete users[socket.id];
+        socket.broadcast.emit("call:canceled");
         io.emit("users", Object.values(users));
         if (callUsers[socket.id]) {
             delete callUsers[socket.id];

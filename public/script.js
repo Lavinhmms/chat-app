@@ -105,6 +105,54 @@ function playNotification() {
     } catch(e) {}
 }
 
+// ── Ringtone ──────────────────────────────────────
+let ringOsc = null;
+let ringGain = null;
+let ringInterval = null;
+
+function startRingtone() {
+    stopRingtone();
+    try {
+        ringGain = audioCtx.createGain();
+        ringGain.connect(audioCtx.destination);
+        ringGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+        ringOsc = audioCtx.createOscillator();
+        ringOsc.type = 'sine';
+        ringOsc.connect(ringGain);
+        ringOsc.start();
+
+        let tick = 0;
+        ringInterval = setInterval(() => {
+            tick++;
+            const now = audioCtx.currentTime;
+            const cycle = tick % 40;
+            if (cycle < 20) {
+                const freq = (cycle % 4 < 2) ? 440 : 480;
+                ringOsc.frequency.setValueAtTime(freq, now);
+                ringGain.gain.setValueAtTime(0.15, now);
+            } else {
+                ringGain.gain.setValueAtTime(0, now);
+            }
+        }, 100);
+    } catch(e) {}
+}
+
+function stopRingtone() {
+    if (ringInterval) {
+        clearInterval(ringInterval);
+        ringInterval = null;
+    }
+    if (ringOsc) {
+        try { ringOsc.stop(); ringOsc.disconnect(); } catch(e) {}
+        ringOsc = null;
+    }
+    if (ringGain) {
+        try { ringGain.disconnect(); } catch(e) {}
+        ringGain = null;
+    }
+}
+
 // ── Chat ──────────────────────────────────────────
 form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -546,6 +594,17 @@ const callCount       = document.getElementById("callCount");
 const callPanelHeader = document.getElementById("callPanelHeader");
 const appEl           = document.querySelector(".app");
 let   callExpanded    = false;
+let   isCalling       = false;
+let   incomingCallFrom = null;
+let   callRingTimeout  = null;
+
+// Incoming call overlay DOM refs
+const incomingCallOverlay = document.getElementById("incomingCallOverlay");
+const incomingCallAvatar  = document.getElementById("incomingCallAvatar");
+const incomingCallName    = document.getElementById("incomingCallName");
+const incomingCallStatus  = document.getElementById("incomingCallStatus");
+const acceptCallBtn       = document.getElementById("acceptCallBtn");
+const declineCallBtn      = document.getElementById("declineCallBtn");
 
 // WebRTC config — using free public STUN servers
 const RTC_CONFIG = {
@@ -575,31 +634,65 @@ document.addEventListener("click", (e) => {
         topMenuDropdown.classList.add("hidden");
 });
 
-// ── Toggle call panel ─────────────────────────────
+// ── Toggle call / ring ────────────────────────────
 const callBtn = document.getElementById("callBtn");
 callBtn.addEventListener("click", () => {
-    topMenuDropdown.classList.add("hidden"); // close menu
-    if (callPanel.classList.contains("hidden")) {
-        callPanel.classList.remove("hidden");
-        // Always open expanded so controls are visible
-        callExpanded = true;
-        callPanel.classList.add("expanded");
-        isMinimized = false;
-        isMaximized = false;
-    } else {
-        if (inCall) leaveCall();
-        callPanel.classList.add("hidden");
-        callPanel.classList.remove("expanded", "minimized", "maximized");
-        callExpanded = false;
-        isMinimized = false;
-        isMaximized = false;
-    }
+    topMenuDropdown.classList.add("hidden");
+    if (isCalling) { cancelCall(); return; }
+    if (inCall) { callPanel.classList.toggle("hidden"); return; }
+    startCalling();
 });
+
+function startCalling() {
+    isCalling = true;
+    callPanel.classList.remove("hidden");
+    callPanel.classList.add("expanded");
+    callExpanded = true;
+    isMinimized = false;
+    isMaximized = false;
+    joinCallBtn.textContent = "🔔 Ringing... Cancel";
+    joinCallBtn.classList.add("active");
+    socket.emit("call:ring", { username: username.value });
+    callRingTimeout = setTimeout(() => {
+        if (isCalling) cancelCall();
+    }, 30000);
+}
+
+function cancelCall() {
+    isCalling = false;
+    if (callRingTimeout) { clearTimeout(callRingTimeout); callRingTimeout = null; }
+    socket.emit("call:cancel");
+    joinCallBtn.textContent = "📹 Join Call";
+    joinCallBtn.classList.remove("active");
+    callPanel.classList.add("hidden");
+    callPanel.classList.remove("expanded", "minimized", "maximized");
+    callExpanded = false;
+    isMinimized = false;
+    isMaximized = false;
+}
 
 // ── Panel toggle ──────────────────────────────────
 exploreBtn.addEventListener("click", () => {
     topMenuDropdown.classList.add("hidden");
     videoPanel.classList.contains("hidden") ? openVideoPanel() : closeVideoPanel();
+});
+
+// ── Accept / Decline incoming call ────────────────
+acceptCallBtn.addEventListener("click", () => {
+    if (!incomingCallFrom) return;
+    stopRingtone();
+    incomingCallOverlay.classList.add("hidden");
+    socket.emit("call:accept", { to: incomingCallFrom });
+    incomingCallFrom = null;
+    if (!inCall) joinCallBtn.click();
+});
+
+declineCallBtn.addEventListener("click", () => {
+    if (!incomingCallFrom) return;
+    stopRingtone();
+    incomingCallOverlay.classList.add("hidden");
+    socket.emit("call:reject", { to: incomingCallFrom });
+    incomingCallFrom = null;
 });
 
 // ── Window control buttons ────────────────────────
@@ -651,6 +744,7 @@ maximizeCallBtn.addEventListener("click", (e) => {
 // Close — leave call and hide panel
 closeCallBtn.addEventListener("click", (e) => {
     e.stopPropagation();
+    if (isCalling) cancelCall();
     if (inCall) leaveCall();
     callPanel.classList.add("hidden");
     callPanel.classList.remove("minimized", "maximized", "expanded");
@@ -733,7 +827,7 @@ function stopDrag() {
 
 
 // ── Join call ─────────────────────────────────────
-joinCallBtn.addEventListener("click", async () => {
+async function joinCall() {
     if (inCall) return;
     if (!username.value.trim()) {
         alert("Please enter your name first!");
@@ -748,16 +842,18 @@ joinCallBtn.addEventListener("click", async () => {
         joinCallBtn.disabled = true;
         callBtn.classList.add("in-call");
 
-        // Add my own video tile
         addVideoTile(socket.id, username.value, localStream, true);
 
-        // Tell server I joined
         socket.emit("call:join", username.value);
-
     } catch(e) {
         alert("Camera/mic access denied. Please allow permissions and try again.");
         console.error(e);
     }
+}
+
+joinCallBtn.addEventListener("click", async () => {
+    if (isCalling) { cancelCall(); return; }
+    await joinCall();
 });
 
 function leaveCall() {
@@ -997,6 +1093,38 @@ socket.on("call:user-left", (socketId) => {
 // ── Participant count ─────────────────────────────
 socket.on("call:participants", (count) => {
     callCount.textContent = count + " in call";
+});
+
+// ── Incoming call signaling ───────────────────────
+socket.on("call:incoming", ({ from, username: name }) => {
+    if (inCall || incomingCallFrom) return;
+    incomingCallFrom = from;
+    incomingCallAvatar.textContent = name.charAt(0).toUpperCase();
+    incomingCallName.textContent = name;
+    incomingCallStatus.textContent = "is calling...";
+    incomingCallOverlay.classList.remove("hidden");
+    startRingtone();
+});
+
+socket.on("call:canceled", () => {
+    stopRingtone();
+    incomingCallOverlay.classList.add("hidden");
+    incomingCallFrom = null;
+});
+
+socket.on("call:accepted", async ({ socketId, username: name }) => {
+    if (!isCalling) return;
+    isCalling = false;
+    if (callRingTimeout) { clearTimeout(callRingTimeout); callRingTimeout = null; }
+    joinCallBtn.textContent = "✅ " + name + " joined";
+    joinCallBtn.classList.remove("active");
+    if (!inCall) setTimeout(() => joinCall(), 600);
+});
+
+socket.on("call:rejected", ({ socketId, username: name }) => {
+    if (!isCalling) return;
+    joinCallBtn.textContent = "❌ " + name + " declined";
+    setTimeout(() => { if (isCalling) cancelCall(); }, 2000);
 });
 
 
