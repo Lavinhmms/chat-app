@@ -49,12 +49,15 @@ const emojiBtn      = document.getElementById("emojiBtn");
 const emojiPicker   = document.getElementById("emojiPicker");
 const exploreBtn    = document.getElementById("exploreBtn");
 const videoPanel    = document.getElementById("videoPanel");
-const closeVideoBtn = document.getElementById("closeVideoBtn");
 const videoInput    = document.getElementById("videoInput");
 const loadVideoBtn  = document.getElementById("loadVideoBtn");
 const videoStatus   = document.getElementById("videoStatus");
 const searchResults = document.getElementById("searchResults");
 const videoEmpty    = document.getElementById("videoEmpty");
+const videoQueue    = document.getElementById("videoQueue");
+const queueItems    = document.getElementById("queueItems");
+const queueCount    = document.getElementById("queueCount");
+const queueHeader   = document.getElementById("queueHeader");
 const contentArea   = document.querySelector(".content-area");
 const hamburger     = document.getElementById("hamburger");
 const sidebar       = document.getElementById("sidebar");
@@ -111,14 +114,18 @@ form.addEventListener("submit", (e) => {
     socket.emit("stop typing");
     emojiPicker.classList.add("hidden");
 });
-socket.on("chat message", (data) => {
+function appendMessage(data, container) {
     const div = document.createElement("div");
     div.classList.add("message");
     if (data.user === username.value) div.classList.add("self");
-    else playNotification();
+    else if (container === chat) playNotification();
     div.innerHTML = "<strong>" + data.user + "</strong>" + data.msg;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+socket.on("chat message", (data) => {
+    appendMessage(data, chat);
+    appendMessage(data, vchatMsgs);
 });
 
 // ── Typing ────────────────────────────────────────
@@ -129,8 +136,8 @@ input.addEventListener("input", () => {
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
 });
-socket.on("typing",      (u) => { typingIndicator.textContent = u + " is typing..."; });
-socket.on("stop typing", ()  => { typingIndicator.textContent = ""; });
+socket.on("typing",      (u) => { typingIndicator.textContent = u + " is typing..."; document.getElementById("vchatTyping").textContent = u + " is typing..."; });
+socket.on("stop typing", ()  => { typingIndicator.textContent = ""; document.getElementById("vchatTyping").textContent = ""; });
 
 // ── Users ─────────────────────────────────────────
 socket.on("users", (users) => {
@@ -151,15 +158,25 @@ const emojis = ["😀","😂","😍","😎","😭","😡","🥺","😏","🤔","
                  "😈","👻","💀","🤖","👽","🐶","🐱","🦊","🐼","🦁",
                  "🍕","🍔","🍩","🍦","🎂","🍣","🍜","🍎","🍓","🍉"];
 const grid = emojiPicker.querySelector(".emoji-grid");
+const vgrid = document.querySelector("#vemojiPicker .emoji-grid");
 emojis.forEach(emoji => {
     const span = document.createElement("span");
     span.textContent = emoji;
     span.addEventListener("click", () => { input.value += emoji; input.focus(); });
     grid.appendChild(span);
+    const vspan = document.createElement("span");
+    vspan.textContent = emoji;
+    vspan.addEventListener("click", () => {
+        const activeInput = document.activeElement;
+        if (activeInput === vinput) { vinput.value += emoji; vinput.focus(); }
+        else { input.value += emoji; input.focus(); }
+    });
+    vgrid.appendChild(vspan);
 });
 emojiBtn.addEventListener("click", (e) => { e.stopPropagation(); emojiPicker.classList.toggle("hidden"); });
 document.addEventListener("click", (e) => {
     if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.classList.add("hidden");
+    if (!document.getElementById("vemojiPicker").contains(e.target) && e.target !== vemojiBtn) document.getElementById("vemojiPicker").classList.add("hidden");
 });
 
 // ── YouTube Player ────────────────────────────────
@@ -170,6 +187,7 @@ let pendingVideoId   = null;
 let pendingSeekTime  = null;
 let pendingPaused    = false;
 let currentVideoId   = null;
+let queueList       = [];
 
 window.onYouTubeIframeAPIReady = function() {
     player = new YT.Player("ytPlayer", {
@@ -202,6 +220,11 @@ window.onYouTubeIframeAPIReady = function() {
             },
             onStateChange: (e) => {
                 if (isSyncing) return;
+                if (e.data === YT.PlayerState.ENDED) {
+                    videoStatus.textContent = "⏭️ Loading next from queue...";
+                    socket.emit("video:next-from-queue");
+                    return;
+                }
                 // Debounce to avoid double-firing
                 clearTimeout(window._stateChangeTimer);
                 window._stateChangeTimer = setTimeout(() => {
@@ -277,12 +300,16 @@ function extractVideoId(url) {
 function openVideoPanel() {
     videoPanel.classList.remove("hidden");
     contentArea.classList.add("video-open");
+    // Hide separate call panel — call is in video panel's call tab
+    if (inCall) callPanel.classList.add("hidden");
 }
 function closeVideoPanel() {
     videoPanel.classList.add("hidden");
     contentArea.classList.remove("video-open");
     searchResults.classList.add("hidden");
     hideBlockedMessage();
+    // Restore separate call panel if in call
+    if (inCall) callPanel.classList.remove("hidden");
 }
 
 // ── Load video (by this user) ─────────────────────
@@ -290,10 +317,79 @@ function loadVideo(videoId, title) {
     searchResults.classList.add("hidden");
     videoInput.value = "";
     openVideoPanel();                    // open panel FIRST
+
+    // If a video is already loaded, add to queue instead
+    if (currentVideoId !== null) {
+        addToQueue(videoId, title);
+        setTimeout(() => videoInput.focus(), 300);
+        return;
+    }
+
     playVideoById(videoId, 0, false);    // then load video
     videoStatus.textContent = title ? ("🎬 " + title) : "🎬 Watching together!";
     socket.emit("video:load", videoId);
     setTimeout(() => videoInput.focus(), 300);
+}
+
+// ── Queue functions ──────────────────────────────
+function addToQueue(videoId, title) {
+    if (queueList.length >= 6) return;
+    const item = { videoId, title: title || "Untitled", addedBy: username.value };
+    queueList.push(item);
+    socket.emit("video:add-to-queue", item);
+    videoStatus.textContent = "➕ Added to queue (" + queueList.length + "/6)";
+}
+
+function renderQueue() {
+    videoQueue.classList.toggle("hidden", queueList.length === 0);
+    queueItems.innerHTML = "";
+    queueCount.textContent = queueList.length;
+    queueList.forEach((item, i) => {
+        const div = document.createElement("div");
+        div.className = "queue-item";
+        div.innerHTML =
+            "<span class='queue-item-title'>" + (item.title || item.videoId) + "</span>" +
+            "<button class='queue-item-remove' data-index='" + i + "'>✕</button>";
+        div.querySelector(".queue-item-remove").addEventListener("click", (e) => {
+            e.stopPropagation();
+            queueList.splice(i, 1);
+            socket.emit("video:remove-from-queue", i);
+        });
+        queueItems.appendChild(div);
+    });
+}
+
+queueHeader.addEventListener("click", () => {
+    videoQueue.classList.toggle("collapsed");
+});
+
+// ── Resizable video bottom ────────────────────────
+const videoBottom   = document.getElementById("videoBottom");
+const bottomResize  = document.getElementById("bottomResize");
+let isResizing      = false;
+
+bottomResize.addEventListener("mousedown", (e) => {
+    isResizing = true;
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onResize);
+    document.addEventListener("mouseup", stopResize);
+});
+
+function onResize(e) {
+    if (!isResizing) return;
+    const panelRect = videoBottom.parentElement.getBoundingClientRect();
+    const newHeight = panelRect.bottom - e.clientY;
+    const clamped = Math.max(80, Math.min(newHeight, window.innerHeight * 0.6));
+    videoBottom.style.height = clamped + "px";
+}
+
+function stopResize() {
+    isResizing = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    document.removeEventListener("mousemove", onResize);
+    document.removeEventListener("mouseup", stopResize);
 }
 
 // ── Search ────────────────────────────────────────
@@ -394,18 +490,68 @@ socket.on("video:seek", (time) => {
     setTimeout(() => { isSyncing = false; }, 800);
 });
 
-// ── Panel toggle ──────────────────────────────────
-exploreBtn.addEventListener("click", () => {
-    topMenuDropdown.classList.add("hidden");
-    videoPanel.classList.contains("hidden") ? openVideoPanel() : closeVideoPanel();
+// ── Queue socket sync ────────────────────────────
+socket.on("video:queue-update", (q) => {
+    queueList = q;
+    renderQueue();
 });
-closeVideoBtn.addEventListener("click", closeVideoPanel);
+
+socket.on("video:next-playing", (title) => {
+    videoStatus.textContent = "▶️ " + title;
+});
+
+// ── Close video panel (top-right ✕) ─────────────
+
+
+// ── Video bottom tabs ──────────────────────────────
+const vtabToggle = document.getElementById("vtabToggle");
+let showingChat = true;
+function switchVtab(showChat) {
+    showingChat = showChat;
+    document.querySelectorAll(".vtab-pane").forEach(p => p.classList.remove("active"));
+    if (showingChat) {
+        document.getElementById("vtabChat").classList.add("active");
+        vtabToggle.textContent = "📹 Call";
+        if (inCall && videoPanel.classList.contains("hidden")) callPanel.classList.remove("hidden");
+    } else {
+        document.getElementById("vtabCall").classList.add("active");
+        vtabToggle.textContent = "💬 Chat";
+        if (inCall) callPanel.classList.add("hidden");
+    }
+}
+vtabToggle.addEventListener("click", () => switchVtab(!showingChat));
+
+// ── Video panel chat ───────────────────────────────
+const vform = document.getElementById("vform");
+const vinput = document.getElementById("vinput");
+const vchatMsgs = document.getElementById("vchatMsgs");
+const vemojiBtn = document.getElementById("vemojiBtn");
+
+vform.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!vinput.value.trim() || !username.value.trim()) return;
+    socket.emit("chat message", { user: username.value, msg: vinput.value });
+    vinput.value = "";
+    socket.emit("stop typing");
+});
+
+vinput.addEventListener("input", () => {
+    if (!username.value) return;
+    socket.emit("typing", username.value);
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
+});
+
+const vemojiPicker = document.getElementById("vemojiPicker");
+vemojiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    vemojiPicker.classList.toggle("hidden");
+});
 
 // ════════════════════════════════════════════════════
 // GROUP VIDEO CALL — WebRTC Mesh + Picture-in-Picture
 // ════════════════════════════════════════════════════
 
-const callBtn         = document.getElementById("callBtn");
 const callPanel       = document.getElementById("callPanel");
 const callVideos      = document.getElementById("callVideos");
 const callPipRow      = document.getElementById("callPipRow");
@@ -447,6 +593,7 @@ document.addEventListener("click", (e) => {
 });
 
 // ── Toggle call panel ─────────────────────────────
+const callBtn = document.getElementById("callBtn");
 callBtn.addEventListener("click", () => {
     topMenuDropdown.classList.add("hidden"); // close menu
     if (callPanel.classList.contains("hidden")) {
@@ -464,6 +611,12 @@ callBtn.addEventListener("click", () => {
         isMinimized = false;
         isMaximized = false;
     }
+});
+
+// ── Panel toggle ──────────────────────────────────
+exploreBtn.addEventListener("click", () => {
+    topMenuDropdown.classList.add("hidden");
+    videoPanel.classList.contains("hidden") ? openVideoPanel() : closeVideoPanel();
 });
 
 // ── Window control buttons ────────────────────────
@@ -518,7 +671,6 @@ closeCallBtn.addEventListener("click", (e) => {
     if (inCall) leaveCall();
     callPanel.classList.add("hidden");
     callPanel.classList.remove("minimized", "maximized", "expanded");
-    callBtn.classList.remove("in-call");
     isMinimized = false;
     isMaximized = false;
 });
@@ -595,6 +747,95 @@ function stopDrag() {
     document.removeEventListener("touchend",  stopDrag);
 }
 
+// ── Video panel call elements ─────────────────────
+const vjoinCallBtn    = document.getElementById("vjoinCallBtn");
+const vtoggleMic      = document.getElementById("vtoggleMic");
+const vtoggleCamera   = document.getElementById("vtoggleCamera");
+const vcallCount      = document.getElementById("vcallCount");
+const vcallVideos     = document.getElementById("vcallVideos");
+
+// ── Modify addVideoTile to also render in vcallVideos ──
+const origAddVideoTile = addVideoTile;
+addVideoTile = function(socketId, name, stream, isLocal) {
+    origAddVideoTile(socketId, name, stream, isLocal);
+    const displayName = isLocal ? (name + " (You)") : name;
+    const tile = document.createElement("div");
+    tile.className = "call-video-tile";
+    tile.id = "vtile-" + socketId;
+    const video = document.createElement("video");
+    video.autoplay = true; video.playsInline = true;
+    if (isLocal) video.muted = true;
+    video.srcObject = stream;
+    const nameTag = document.createElement("div");
+    nameTag.className = "tile-name";
+    nameTag.textContent = displayName;
+    const mutedIcon = document.createElement("div");
+    mutedIcon.className = "tile-muted";
+    const avatarWrap = document.createElement("div");
+    avatarWrap.className = "call-avatar-wrap";
+    const avatar = document.createElement("div");
+    avatar.className = "call-avatar";
+    avatar.textContent = name.charAt(0).toUpperCase();
+    avatarWrap.appendChild(avatar);
+    tile.appendChild(video);
+    tile.appendChild(avatarWrap);
+    tile.appendChild(nameTag);
+    tile.appendChild(mutedIcon);
+    vcallVideos.appendChild(tile);
+};
+
+const origRemoveVideoTile = removeVideoTile;
+removeVideoTile = function(socketId) {
+    origRemoveVideoTile(socketId);
+    const vtile = document.getElementById("vtile-" + socketId);
+    if (vtile) vtile.remove();
+};
+
+// ── Video panel call button handlers ──────────────
+vjoinCallBtn.addEventListener("click", async () => {
+    if (inCall) return;
+    if (!username.value.trim()) return;
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        inCall = true;
+        vjoinCallBtn.textContent = "✅ In Call";
+        vjoinCallBtn.classList.remove("active");
+        vjoinCallBtn.classList.add("in-call-state");
+        joinCallBtn.textContent = "✅ In Call";
+        joinCallBtn.classList.remove("active");
+        joinCallBtn.classList.add("in-call-state");
+        joinCallBtn.disabled = true;
+        callBtn.classList.add("in-call");
+        addVideoTile(socket.id, username.value, localStream, true);
+        socket.emit("call:join", username.value);
+        switchVtab(false);
+    } catch(e) {
+        alert("Camera/mic access denied.");
+        console.error(e);
+    }
+});
+
+vtoggleMic.addEventListener("click", () => {
+    if (!inCall || !localStream) return;
+    micEnabled = !micEnabled;
+    localStream.getAudioTracks().forEach(t => { t.enabled = micEnabled; });
+    vtoggleMic.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
+    vtoggleMic.classList.toggle("muted", !micEnabled);
+    toggleMicBtn.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
+    toggleMicBtn.classList.toggle("muted", !micEnabled);
+    const icon = document.querySelector("#vtile-" + socket.id + " .tile-muted");
+    if (icon) icon.textContent = micEnabled ? "" : "🔇";
+    const pipIcon = document.querySelector("#tile-" + socket.id + " .tile-muted");
+    if (pipIcon) pipIcon.textContent = micEnabled ? "" : "🔇";
+});
+
+vtoggleCamera.addEventListener("click", () => {
+    if (!inCall || !localStream) return;
+    cameraEnabled = !cameraEnabled;
+    localStream.getVideoTracks().forEach(t => { t.enabled = cameraEnabled; });
+    updateCameraUI();
+});
+
 // ── Join call ─────────────────────────────────────
 joinCallBtn.addEventListener("click", async () => {
     if (inCall) return;
@@ -609,6 +850,9 @@ joinCallBtn.addEventListener("click", async () => {
         joinCallBtn.classList.remove("active");
         joinCallBtn.classList.add("in-call-state");
         joinCallBtn.disabled = true;
+        vjoinCallBtn.textContent = "✅ In Call";
+        vjoinCallBtn.classList.remove("active");
+        vjoinCallBtn.classList.add("in-call-state");
         callBtn.classList.add("in-call");
 
         // Add my own video tile
@@ -616,6 +860,8 @@ joinCallBtn.addEventListener("click", async () => {
 
         // Tell server I joined
         socket.emit("call:join", username.value);
+
+        switchVtab(false);
 
     } catch(e) {
         alert("Camera/mic access denied. Please allow permissions and try again.");
@@ -640,12 +886,16 @@ function leaveCall() {
     // Clear video grids
     callVideos.innerHTML = "";
     callPipRow.innerHTML = "";
+    vcallVideos.innerHTML = "";
 
     // Reset UI
     joinCallBtn.textContent = "📹 Join Call";
     joinCallBtn.classList.add("active");
     joinCallBtn.classList.remove("in-call-state");
     joinCallBtn.disabled = false;
+    vjoinCallBtn.textContent = "📹 Join Call";
+    vjoinCallBtn.classList.add("active");
+    vjoinCallBtn.classList.remove("in-call-state");
     callBtn.classList.remove("in-call");
     micEnabled    = true;
     cameraEnabled = true;
@@ -653,11 +903,25 @@ function leaveCall() {
     toggleCameraBtn.textContent = "📷 Camera Off";
     toggleMicBtn.classList.remove("muted", "danger");
     toggleCameraBtn.classList.remove("muted", "danger");
+    vtoggleMic.textContent    = "🎤 Mute";
+    vtoggleCamera.textContent = "📷 Camera Off";
+    vtoggleMic.classList.remove("muted", "danger");
+    vtoggleCamera.classList.remove("muted", "danger");
 
     socket.emit("call:leave");
 }
 
 // ── Mic toggle ────────────────────────────────────
+function updateMicUI() {
+    toggleMicBtn.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
+    toggleMicBtn.classList.toggle("muted", !micEnabled);
+    vtoggleMic.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
+    vtoggleMic.classList.toggle("muted", !micEnabled);
+    const icon = document.getElementById("tile-" + socket.id)?.querySelector(".tile-muted");
+    if (icon) icon.textContent = micEnabled ? "" : "🔇";
+    const vicon = document.getElementById("vtile-" + socket.id)?.querySelector(".tile-muted");
+    if (vicon) vicon.textContent = micEnabled ? "" : "🔇";
+}
 toggleMicBtn.addEventListener("click", () => {
     if (!inCall || !localStream) {
         alert("Join the call first!");
@@ -665,22 +929,20 @@ toggleMicBtn.addEventListener("click", () => {
     }
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => { t.enabled = micEnabled; });
-    toggleMicBtn.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
-    toggleMicBtn.classList.toggle("muted", !micEnabled);
-    const myTile = document.getElementById("tile-" + socket.id);
-    if (myTile) {
-        const icon = myTile.querySelector(".tile-muted");
-        if (icon) icon.textContent = micEnabled ? "" : "🔇";
-    }
-    const myPip = document.getElementById("pip-" + socket.id);
-    if (myPip) {
-        let pipIcon = myPip.querySelector(".pip-muted");
-        if (!pipIcon) { pipIcon = document.createElement("div"); pipIcon.className = "pip-muted tile-muted"; myPip.appendChild(pipIcon); }
-        pipIcon.textContent = micEnabled ? "" : "🔇";
-    }
+    updateMicUI();
 });
 
 // ── Camera toggle ─────────────────────────────────
+function updateCameraUI() {
+    toggleCameraBtn.textContent = cameraEnabled ? "📷 Camera Off" : "📷 Camera On";
+    toggleCameraBtn.classList.toggle("danger", !cameraEnabled);
+    vtoggleCamera.textContent = cameraEnabled ? "📷 Camera Off" : "📷 Camera On";
+    vtoggleCamera.classList.toggle("danger", !cameraEnabled);
+    const tile = document.getElementById("tile-" + socket.id);
+    if (tile) tile.classList.toggle("no-video", !cameraEnabled);
+    const vtile = document.getElementById("vtile-" + socket.id);
+    if (vtile) vtile.classList.toggle("no-video", !cameraEnabled);
+}
 toggleCameraBtn.addEventListener("click", () => {
     if (!inCall || !localStream) {
         alert("Join the call first!");
@@ -688,12 +950,7 @@ toggleCameraBtn.addEventListener("click", () => {
     }
     cameraEnabled = !cameraEnabled;
     localStream.getVideoTracks().forEach(t => { t.enabled = cameraEnabled; });
-    toggleCameraBtn.textContent = cameraEnabled ? "📷 Camera Off" : "📷 Camera On";
-    toggleCameraBtn.classList.toggle("danger", !cameraEnabled);
-    const myTile = document.getElementById("tile-" + socket.id);
-    if (myTile) myTile.classList.toggle("no-video", !cameraEnabled);
-    const myPip = document.getElementById("pip-" + socket.id);
-    if (myPip) myPip.style.opacity = cameraEnabled ? "1" : "0.4";
+    updateCameraUI();
 });
 
 // ── Add video tile (expanded grid + PIP row) ─────
@@ -780,6 +1037,11 @@ function createPeer(remoteSocketId, initiator) {
         if (existingPip) {
             existingPip.querySelector("video").srcObject = remoteStream;
         }
+        // Update video panel tile
+        const existingVtile = document.getElementById("vtile-" + remoteSocketId);
+        if (existingVtile) {
+            existingVtile.querySelector("video").srcObject = remoteStream;
+        }
     };
 
     // ICE candidates
@@ -865,4 +1127,8 @@ socket.on("call:user-left", (socketId) => {
 // ── Participant count ─────────────────────────────
 socket.on("call:participants", (count) => {
     callCount.textContent = count + " in call";
+    vcallCount.textContent = count + " in call";
 });
+
+
+

@@ -10,6 +10,7 @@ app.use(express.static("public"));
 
 let users     = {};
 let roomState = { videoId: null, playing: false, time: 0, updatedAt: Date.now() };
+let queue     = []; // max 6 items: { videoId, title, addedBy }
 let callUsers = {}; // socketId -> username (only users in call)
 
 io.on("connection", (socket) => {
@@ -30,6 +31,7 @@ io.on("connection", (socket) => {
                 playing: roomState.playing
             });
         }
+        socket.emit("video:queue-update", queue);
     });
 
     socket.on("chat message", (data) => { io.emit("chat message", data); });
@@ -41,6 +43,30 @@ io.on("connection", (socket) => {
     socket.on("video:play",  (time) => { roomState = { ...roomState, playing: true,  time, updatedAt: Date.now() };   socket.broadcast.emit("video:play",  time); });
     socket.on("video:pause", (time) => { roomState = { ...roomState, playing: false, time, updatedAt: Date.now() };   socket.broadcast.emit("video:pause", time); });
     socket.on("video:seek",  (time) => { roomState = { ...roomState,                 time, updatedAt: Date.now() };   socket.broadcast.emit("video:seek",  time); });
+
+    // ── Video queue ──────────────────────────────
+    socket.on("video:add-to-queue", (video) => {
+        if (queue.length >= 6) return;
+        queue.push(video);
+        io.emit("video:queue-update", queue);
+    });
+
+    socket.on("video:remove-from-queue", (index) => {
+        if (index >= 0 && index < queue.length) {
+            queue.splice(index, 1);
+            io.emit("video:queue-update", queue);
+        }
+    });
+
+    socket.on("video:next-from-queue", () => {
+        if (queue.length > 0) {
+            const next = queue.shift();
+            roomState = { videoId: next.videoId, playing: true, time: 0, updatedAt: Date.now() };
+            io.emit("video:queue-update", queue);
+            io.emit("video:load", next.videoId);
+            io.emit("video:next-playing", next.title || "Next video");
+        }
+    });
 
     // ── WebRTC signaling ──────────────────────────
 

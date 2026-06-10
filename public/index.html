@@ -64,10 +64,6 @@
 
             <!-- Watch Together Panel -->
             <div class="video-panel hidden" id="videoPanel">
-                <div class="video-panel-header">
-                    <span>🎬 Watch Together</span>
-                    <button id="closeVideoBtn">✕</button>
-                </div>
                 <div class="video-url-bar">
                     <input id="videoInput" placeholder="Paste YouTube link or search..." autocomplete="off" />
                     <button id="loadVideoBtn">▶ Play</button>
@@ -82,13 +78,49 @@
                     </div>
                 </div>
                 <div class="video-status" id="videoStatus">No video loaded</div>
+
+                <!-- Queue Section -->
+                <div class="video-queue" id="videoQueue">
+                    <div class="video-queue-header" id="queueHeader">
+                        <span class="queue-toggle" id="queueToggle">▾</span>
+                        Up Next (<span id="queueCount">0</span>/6)
+                    </div>
+                    <div class="video-queue-items" id="queueItems"></div>
+                </div>
+
+                <!-- Bottom Section with tabs -->
+                <div class="video-bottom" id="videoBottom">
+                    <div class="video-bottom-resize" id="bottomResize"></div>
+                    <div class="vtab-bar">
+                        <button class="vtab-toggle" id="vtabToggle">💬 Chat</button>
+                    </div>
+                    <div class="vtab-pane active" id="vtabChat">
+                        <div id="vchatMsgs"></div>
+                        <div id="vchatTyping"></div>
+                        <div id="vemojiPicker" class="vemoji-picker hidden"><div class="emoji-grid"></div></div>
+                        <form id="vform">
+                            <button type="button" id="vemojiBtn">😊</button>
+                            <input id="vinput" placeholder="Type a message..." autocomplete="off" />
+                            <button type="submit">➤</button>
+                        </form>
+                    </div>
+                    <div class="vtab-pane" id="vtabCall">
+                        <div class="vcall-controls">
+                            <button id="vjoinCallBtn" class="active">📹 Join Call</button>
+                            <button id="vtoggleMic">🎤 Mute</button>
+                            <button id="vtoggleCamera">📷 Camera Off</button>
+                        </div>
+                        <div class="vcall-count" id="vcallCount">0 in call</div>
+                        <div class="vcall-videos" id="vcallVideos"></div>
+                    </div>
+                </div>
             </div>
 
         </div>
     </div>
 </div>
 
-<!-- Call Panel — Picture in Picture -->
+<!-- Call Panel — Picture in Picture (fallback for when video panel is closed) -->
 <div class="call-panel hidden" id="callPanel">
     <div class="call-panel-header" id="callPanelHeader">
         <span>📹 Group Call &nbsp;<span class="call-count" id="callCount">0 in call</span></span>
