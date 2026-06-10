@@ -504,23 +504,6 @@ socket.on("video:next-playing", (title) => {
 
 
 // ── Video bottom tabs ──────────────────────────────
-const vtabToggle = document.getElementById("vtabToggle");
-let showingChat = true;
-function switchVtab(showChat) {
-    showingChat = showChat;
-    document.querySelectorAll(".vtab-pane").forEach(p => p.classList.remove("active"));
-    if (showingChat) {
-        document.getElementById("vtabChat").classList.add("active");
-        vtabToggle.textContent = "📹 Call";
-        if (inCall && videoPanel.classList.contains("hidden")) callPanel.classList.remove("hidden");
-    } else {
-        document.getElementById("vtabCall").classList.add("active");
-        vtabToggle.textContent = "💬 Chat";
-        if (inCall) callPanel.classList.add("hidden");
-    }
-}
-vtabToggle.addEventListener("click", () => switchVtab(!showingChat));
-
 // ── Video panel chat ───────────────────────────────
 const vform = document.getElementById("vform");
 const vinput = document.getElementById("vinput");
@@ -747,94 +730,7 @@ function stopDrag() {
     document.removeEventListener("touchend",  stopDrag);
 }
 
-// ── Video panel call elements ─────────────────────
-const vjoinCallBtn    = document.getElementById("vjoinCallBtn");
-const vtoggleMic      = document.getElementById("vtoggleMic");
-const vtoggleCamera   = document.getElementById("vtoggleCamera");
-const vcallCount      = document.getElementById("vcallCount");
-const vcallVideos     = document.getElementById("vcallVideos");
 
-// ── Modify addVideoTile to also render in vcallVideos ──
-const origAddVideoTile = addVideoTile;
-addVideoTile = function(socketId, name, stream, isLocal) {
-    origAddVideoTile(socketId, name, stream, isLocal);
-    const displayName = isLocal ? (name + " (You)") : name;
-    const tile = document.createElement("div");
-    tile.className = "call-video-tile";
-    tile.id = "vtile-" + socketId;
-    const video = document.createElement("video");
-    video.autoplay = true; video.playsInline = true;
-    if (isLocal) video.muted = true;
-    video.srcObject = stream;
-    const nameTag = document.createElement("div");
-    nameTag.className = "tile-name";
-    nameTag.textContent = displayName;
-    const mutedIcon = document.createElement("div");
-    mutedIcon.className = "tile-muted";
-    const avatarWrap = document.createElement("div");
-    avatarWrap.className = "call-avatar-wrap";
-    const avatar = document.createElement("div");
-    avatar.className = "call-avatar";
-    avatar.textContent = name.charAt(0).toUpperCase();
-    avatarWrap.appendChild(avatar);
-    tile.appendChild(video);
-    tile.appendChild(avatarWrap);
-    tile.appendChild(nameTag);
-    tile.appendChild(mutedIcon);
-    vcallVideos.appendChild(tile);
-};
-
-const origRemoveVideoTile = removeVideoTile;
-removeVideoTile = function(socketId) {
-    origRemoveVideoTile(socketId);
-    const vtile = document.getElementById("vtile-" + socketId);
-    if (vtile) vtile.remove();
-};
-
-// ── Video panel call button handlers ──────────────
-vjoinCallBtn.addEventListener("click", async () => {
-    if (inCall) return;
-    if (!username.value.trim()) return;
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        inCall = true;
-        vjoinCallBtn.textContent = "✅ In Call";
-        vjoinCallBtn.classList.remove("active");
-        vjoinCallBtn.classList.add("in-call-state");
-        joinCallBtn.textContent = "✅ In Call";
-        joinCallBtn.classList.remove("active");
-        joinCallBtn.classList.add("in-call-state");
-        joinCallBtn.disabled = true;
-        callBtn.classList.add("in-call");
-        addVideoTile(socket.id, username.value, localStream, true);
-        socket.emit("call:join", username.value);
-        switchVtab(false);
-    } catch(e) {
-        alert("Camera/mic access denied.");
-        console.error(e);
-    }
-});
-
-vtoggleMic.addEventListener("click", () => {
-    if (!inCall || !localStream) return;
-    micEnabled = !micEnabled;
-    localStream.getAudioTracks().forEach(t => { t.enabled = micEnabled; });
-    vtoggleMic.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
-    vtoggleMic.classList.toggle("muted", !micEnabled);
-    toggleMicBtn.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
-    toggleMicBtn.classList.toggle("muted", !micEnabled);
-    const icon = document.querySelector("#vtile-" + socket.id + " .tile-muted");
-    if (icon) icon.textContent = micEnabled ? "" : "🔇";
-    const pipIcon = document.querySelector("#tile-" + socket.id + " .tile-muted");
-    if (pipIcon) pipIcon.textContent = micEnabled ? "" : "🔇";
-});
-
-vtoggleCamera.addEventListener("click", () => {
-    if (!inCall || !localStream) return;
-    cameraEnabled = !cameraEnabled;
-    localStream.getVideoTracks().forEach(t => { t.enabled = cameraEnabled; });
-    updateCameraUI();
-});
 
 // ── Join call ─────────────────────────────────────
 joinCallBtn.addEventListener("click", async () => {
@@ -850,9 +746,6 @@ joinCallBtn.addEventListener("click", async () => {
         joinCallBtn.classList.remove("active");
         joinCallBtn.classList.add("in-call-state");
         joinCallBtn.disabled = true;
-        vjoinCallBtn.textContent = "✅ In Call";
-        vjoinCallBtn.classList.remove("active");
-        vjoinCallBtn.classList.add("in-call-state");
         callBtn.classList.add("in-call");
 
         // Add my own video tile
@@ -860,8 +753,6 @@ joinCallBtn.addEventListener("click", async () => {
 
         // Tell server I joined
         socket.emit("call:join", username.value);
-
-        switchVtab(false);
 
     } catch(e) {
         alert("Camera/mic access denied. Please allow permissions and try again.");
@@ -886,16 +777,12 @@ function leaveCall() {
     // Clear video grids
     callVideos.innerHTML = "";
     callPipRow.innerHTML = "";
-    vcallVideos.innerHTML = "";
 
     // Reset UI
     joinCallBtn.textContent = "📹 Join Call";
     joinCallBtn.classList.add("active");
     joinCallBtn.classList.remove("in-call-state");
     joinCallBtn.disabled = false;
-    vjoinCallBtn.textContent = "📹 Join Call";
-    vjoinCallBtn.classList.add("active");
-    vjoinCallBtn.classList.remove("in-call-state");
     callBtn.classList.remove("in-call");
     micEnabled    = true;
     cameraEnabled = true;
@@ -903,10 +790,6 @@ function leaveCall() {
     toggleCameraBtn.textContent = "📷 Camera Off";
     toggleMicBtn.classList.remove("muted", "danger");
     toggleCameraBtn.classList.remove("muted", "danger");
-    vtoggleMic.textContent    = "🎤 Mute";
-    vtoggleCamera.textContent = "📷 Camera Off";
-    vtoggleMic.classList.remove("muted", "danger");
-    vtoggleCamera.classList.remove("muted", "danger");
 
     socket.emit("call:leave");
 }
@@ -915,12 +798,8 @@ function leaveCall() {
 function updateMicUI() {
     toggleMicBtn.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
     toggleMicBtn.classList.toggle("muted", !micEnabled);
-    vtoggleMic.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
-    vtoggleMic.classList.toggle("muted", !micEnabled);
     const icon = document.getElementById("tile-" + socket.id)?.querySelector(".tile-muted");
     if (icon) icon.textContent = micEnabled ? "" : "🔇";
-    const vicon = document.getElementById("vtile-" + socket.id)?.querySelector(".tile-muted");
-    if (vicon) vicon.textContent = micEnabled ? "" : "🔇";
 }
 toggleMicBtn.addEventListener("click", () => {
     if (!inCall || !localStream) {
@@ -936,12 +815,8 @@ toggleMicBtn.addEventListener("click", () => {
 function updateCameraUI() {
     toggleCameraBtn.textContent = cameraEnabled ? "📷 Camera Off" : "📷 Camera On";
     toggleCameraBtn.classList.toggle("danger", !cameraEnabled);
-    vtoggleCamera.textContent = cameraEnabled ? "📷 Camera Off" : "📷 Camera On";
-    vtoggleCamera.classList.toggle("danger", !cameraEnabled);
     const tile = document.getElementById("tile-" + socket.id);
     if (tile) tile.classList.toggle("no-video", !cameraEnabled);
-    const vtile = document.getElementById("vtile-" + socket.id);
-    if (vtile) vtile.classList.toggle("no-video", !cameraEnabled);
 }
 toggleCameraBtn.addEventListener("click", () => {
     if (!inCall || !localStream) {
@@ -1037,11 +912,6 @@ function createPeer(remoteSocketId, initiator) {
         if (existingPip) {
             existingPip.querySelector("video").srcObject = remoteStream;
         }
-        // Update video panel tile
-        const existingVtile = document.getElementById("vtile-" + remoteSocketId);
-        if (existingVtile) {
-            existingVtile.querySelector("video").srcObject = remoteStream;
-        }
     };
 
     // ICE candidates
@@ -1127,7 +997,6 @@ socket.on("call:user-left", (socketId) => {
 // ── Participant count ─────────────────────────────
 socket.on("call:participants", (count) => {
     callCount.textContent = count + " in call";
-    vcallCount.textContent = count + " in call";
 });
 
 
