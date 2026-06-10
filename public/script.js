@@ -634,23 +634,30 @@ document.addEventListener("click", (e) => {
         topMenuDropdown.classList.add("hidden");
 });
 
-// ── Toggle call / ring ────────────────────────────
+// ── Toggle call panel ─────────────────────────────
 const callBtn = document.getElementById("callBtn");
 callBtn.addEventListener("click", () => {
     topMenuDropdown.classList.add("hidden");
-    if (isCalling) { cancelCall(); return; }
-    if (inCall) { callPanel.classList.toggle("hidden"); return; }
-    startCalling();
+    if (callPanel.classList.contains("hidden")) {
+        callPanel.classList.remove("hidden");
+        callPanel.classList.add("expanded");
+        callExpanded = true;
+        isMinimized = false;
+        isMaximized = false;
+    } else {
+        if (isCalling) cancelCall();
+        if (inCall) leaveCall();
+        callPanel.classList.add("hidden");
+        callPanel.classList.remove("expanded", "minimized", "maximized");
+        callExpanded = false;
+        isMinimized = false;
+        isMaximized = false;
+    }
 });
 
 function startCalling() {
     isCalling = true;
-    callPanel.classList.remove("hidden");
-    callPanel.classList.add("expanded");
-    callExpanded = true;
-    isMinimized = false;
-    isMaximized = false;
-    joinCallBtn.textContent = "🔔 Ringing... Cancel";
+    joinCallBtn.textContent = "🔔 Ringing...";
     joinCallBtn.classList.add("active");
     socket.emit("call:ring", { username: username.value });
     callRingTimeout = setTimeout(() => {
@@ -662,13 +669,8 @@ function cancelCall() {
     isCalling = false;
     if (callRingTimeout) { clearTimeout(callRingTimeout); callRingTimeout = null; }
     socket.emit("call:cancel");
-    joinCallBtn.textContent = "📹 Join Call";
+    joinCallBtn.textContent = "📹 Call";
     joinCallBtn.classList.remove("active");
-    callPanel.classList.add("hidden");
-    callPanel.classList.remove("expanded", "minimized", "maximized");
-    callExpanded = false;
-    isMinimized = false;
-    isMaximized = false;
 }
 
 // ── Panel toggle ──────────────────────────────────
@@ -684,7 +686,10 @@ acceptCallBtn.addEventListener("click", () => {
     incomingCallOverlay.classList.add("hidden");
     socket.emit("call:accept", { to: incomingCallFrom });
     incomingCallFrom = null;
-    if (!inCall) joinCallBtn.click();
+    callPanel.classList.remove("hidden");
+    callPanel.classList.add("expanded");
+    callExpanded = true;
+    if (!inCall) joinCall();
 });
 
 declineCallBtn.addEventListener("click", () => {
@@ -853,7 +858,8 @@ async function joinCall() {
 
 joinCallBtn.addEventListener("click", async () => {
     if (isCalling) { cancelCall(); return; }
-    await joinCall();
+    if (inCall) return;
+    startCalling();
 });
 
 function leaveCall() {
