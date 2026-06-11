@@ -230,11 +230,27 @@ document.addEventListener("click", (e) => {
 // ── YouTube Player ────────────────────────────────
 let player           = null;
 let playerReady      = false;
-let isSyncing        = false;
 let pendingVideoId   = null;
 let pendingSeekTime  = null;
 let pendingPaused    = false;
 let currentVideoId   = null;
+
+// Remote action flags — suppress the immediate next state change caused by a remote action
+let pendingRemotePlay = false;
+let pendingRemotePause = false;
+let remotePlayTimeout = null;
+let remotePauseTimeout = null;
+
+function setPendingRemotePlay() {
+    pendingRemotePlay = true;
+    clearTimeout(remotePlayTimeout);
+    remotePlayTimeout = setTimeout(() => { pendingRemotePlay = false; }, 2000);
+}
+function setPendingRemotePause() {
+    pendingRemotePause = true;
+    clearTimeout(remotePauseTimeout);
+    remotePauseTimeout = setTimeout(() => { pendingRemotePause = false; }, 2000);
+}
 let queueList       = [];
 
 window.onYouTubeIframeAPIReady = function() {
@@ -262,23 +278,33 @@ window.onYouTubeIframeAPIReady = function() {
                     pendingVideoId  = null;
                     pendingSeekTime = null;
                     pendingPaused   = false;
+                    setPendingRemotePlay();
                     player.loadVideoById({ videoId: vid, startSeconds: seekTo || 0 });
-                    if (paused) setTimeout(() => player.pauseVideo(), 1500);
+                    if (paused) setTimeout(() => {
+                        if (player) { setPendingRemotePause(); player.pauseVideo(); }
+                    }, 1500);
                 }
             },
             onStateChange: (e) => {
-                if (isSyncing) return;
                 if (e.data === YT.PlayerState.ENDED) {
                     videoStatus.textContent = "⏭️ Loading next from queue...";
                     socket.emit("video:next-from-queue");
                     return;
                 }
-                // Debounce to avoid double-firing
+                // Consume remote-action flags immediately (before debounce)
+                if (e.data === YT.PlayerState.PLAYING && pendingRemotePlay) {
+                    pendingRemotePlay = false;
+                    return;
+                }
+                if (e.data === YT.PlayerState.PAUSED && pendingRemotePause) {
+                    pendingRemotePause = false;
+                    return;
+                }
+                const ct = player.getCurrentTime();
                 clearTimeout(window._stateChangeTimer);
                 window._stateChangeTimer = setTimeout(() => {
-                    if (isSyncing) return;
-                    if (e.data === YT.PlayerState.PLAYING) socket.emit("video:play",  player.getCurrentTime());
-                    if (e.data === YT.PlayerState.PAUSED)  socket.emit("video:pause", player.getCurrentTime());
+                    if (e.data === YT.PlayerState.PLAYING) socket.emit("video:play",  ct);
+                    if (e.data === YT.PlayerState.PAUSED)  socket.emit("video:pause", ct);
                 }, 200);
             },
             onError: (e) => {
@@ -295,14 +321,16 @@ function playVideoById(videoId, seekTime, paused) {
     hideBlockedMessage();
 
     if (playerReady && player) {
-        isSyncing = true;
+        setPendingRemotePlay();
         player.loadVideoById({ videoId: videoId, startSeconds: seekTime || 0 });
-        // Release isSyncing after load settles
-        // Use longer timeout to cover autoplay startup events
-        setTimeout(() => {
-            if (paused && player) player.pauseVideo();
-            setTimeout(() => { isSyncing = false; }, 800);
-        }, 1800);
+        if (paused) {
+            setTimeout(() => {
+                if (player) {
+                    setPendingRemotePause();
+                    player.pauseVideo();
+                }
+            }, 500);
+        }
     } else {
         pendingVideoId  = videoId;
         pendingSeekTime = seekTime || 0;
@@ -519,23 +547,19 @@ socket.on("video:load", (videoId) => {
 // Play / pause / seek sync
 socket.on("video:play", (time) => {
     if (!player || !playerReady) return;
-    isSyncing = true;
+    setPendingRemotePlay();
     player.seekTo(time, true);
     player.playVideo();
-    setTimeout(() => { isSyncing = false; }, 800);
 });
 socket.on("video:pause", (time) => {
     if (!player || !playerReady) return;
-    isSyncing = true;
+    setPendingRemotePause();
     player.seekTo(time, true);
     player.pauseVideo();
-    setTimeout(() => { isSyncing = false; }, 800);
 });
 socket.on("video:seek", (time) => {
     if (!player || !playerReady) return;
-    isSyncing = true;
     player.seekTo(time, true);
-    setTimeout(() => { isSyncing = false; }, 800);
 });
 
 // ── Queue socket sync ────────────────────────────
@@ -839,7 +863,7 @@ async function joinCall() {
         return;
     }
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640, max: 640 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 15, max: 20 } }, audio: true });
         inCall = true;
         joinCallBtn.textContent = "✅ In Call";
         joinCallBtn.classList.remove("active");
@@ -858,7 +882,10 @@ async function joinCall() {
 
 joinCallBtn.addEventListener("click", async () => {
     if (isCalling) { cancelCall(); return; }
-    if (inCall) return;
+    if (inCall) {
+        if (Object.keys(peers).length === 0) leaveCall();
+        else return;
+    }
     startCalling();
 });
 
@@ -1103,7 +1130,11 @@ socket.on("call:participants", (count) => {
 
 // ── Incoming call signaling ───────────────────────
 socket.on("call:incoming", ({ from, username: name }) => {
-    if (inCall || incomingCallFrom) return;
+    if (incomingCallFrom) return;
+    if (inCall) {
+        if (Object.keys(peers).length > 0) return; // In a call with others, ignore
+        leaveCall(); // Alone in a stale call, leave so we can accept
+    }
     incomingCallFrom = from;
     incomingCallAvatar.textContent = name.charAt(0).toUpperCase();
     incomingCallName.textContent = name;
