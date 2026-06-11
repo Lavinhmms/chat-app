@@ -253,6 +253,22 @@ function setPendingRemotePause() {
 }
 let queueList       = [];
 
+let syncInterval = null;
+function startSyncInterval() {
+    if (syncInterval) return;
+    syncInterval = setInterval(() => {
+        if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
+            socket.emit("video:sync", player.getCurrentTime());
+        }
+    }, 10000);
+}
+function stopSyncInterval() {
+    if (syncInterval) {
+        clearInterval(syncInterval);
+        syncInterval = null;
+    }
+}
+
 window.onYouTubeIframeAPIReady = function() {
     player = new YT.Player("ytPlayer", {
         height: "100%",
@@ -270,7 +286,6 @@ window.onYouTubeIframeAPIReady = function() {
         events: {
             onReady: () => {
                 playerReady = true;
-                // If a video was requested before player was ready, load it now
                 if (pendingVideoId) {
                     const vid = pendingVideoId;
                     const seekTo = pendingSeekTime;
@@ -289,9 +304,9 @@ window.onYouTubeIframeAPIReady = function() {
                 if (e.data === YT.PlayerState.ENDED) {
                     videoStatus.textContent = "⏭️ Loading next from queue...";
                     socket.emit("video:next-from-queue");
+                    stopSyncInterval();
                     return;
                 }
-                // Consume remote-action flags immediately (before debounce)
                 if (e.data === YT.PlayerState.PLAYING && pendingRemotePlay) {
                     pendingRemotePlay = false;
                     return;
@@ -300,11 +315,18 @@ window.onYouTubeIframeAPIReady = function() {
                     pendingRemotePause = false;
                     return;
                 }
+                if (document.hidden) return;
                 const ct = player.getCurrentTime();
                 clearTimeout(window._stateChangeTimer);
                 window._stateChangeTimer = setTimeout(() => {
-                    if (e.data === YT.PlayerState.PLAYING) socket.emit("video:play",  ct);
-                    if (e.data === YT.PlayerState.PAUSED)  socket.emit("video:pause", ct);
+                    if (e.data === YT.PlayerState.PLAYING) {
+                        socket.emit("video:play", ct);
+                        startSyncInterval();
+                    }
+                    if (e.data === YT.PlayerState.PAUSED) {
+                        socket.emit("video:pause", ct);
+                        stopSyncInterval();
+                    }
                 }, 200);
             },
             onError: (e) => {
@@ -322,6 +344,7 @@ function playVideoById(videoId, seekTime, paused) {
 
     if (playerReady && player) {
         setPendingRemotePlay();
+        stopSyncInterval();
         player.loadVideoById({ videoId: videoId, startSeconds: seekTime || 0 });
         if (paused) {
             setTimeout(() => {
@@ -330,6 +353,8 @@ function playVideoById(videoId, seekTime, paused) {
                     player.pauseVideo();
                 }
             }, 500);
+        } else {
+            startSyncInterval();
         }
     } else {
         pendingVideoId  = videoId;
@@ -560,6 +585,14 @@ socket.on("video:pause", (time) => {
 socket.on("video:seek", (time) => {
     if (!player || !playerReady) return;
     player.seekTo(time, true);
+});
+
+socket.on("video:sync", (time) => {
+    if (!player || !playerReady) return;
+    const drift = player.getCurrentTime() - time;
+    if (Math.abs(drift) > 1.5) {
+        player.seekTo(time, true);
+    }
 });
 
 // ── Queue socket sync ────────────────────────────

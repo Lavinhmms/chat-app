@@ -43,6 +43,7 @@ io.on("connection", (socket) => {
     socket.on("video:play",  (time) => { roomState = { ...roomState, playing: true,  time, updatedAt: Date.now() };   socket.broadcast.emit("video:play",  time); });
     socket.on("video:pause", (time) => { roomState = { ...roomState, playing: false, time, updatedAt: Date.now() };   socket.broadcast.emit("video:pause", time); });
     socket.on("video:seek",  (time) => { roomState = { ...roomState,                 time, updatedAt: Date.now() };   socket.broadcast.emit("video:seek",  time); });
+    socket.on("video:sync",  (time) => { roomState = { ...roomState, playing: true,   time, updatedAt: Date.now() };   socket.broadcast.emit("video:sync",  time); });
 
     // ── Video queue ──────────────────────────────
     socket.on("video:add-to-queue", (video) => {
