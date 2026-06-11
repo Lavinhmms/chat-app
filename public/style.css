@@ -17,6 +17,7 @@ body.light { background: #f1f5f9; color: #111827; }
     display: flex; align-items: center; justify-content: center;
     background: #050510;
 }
+.lobby.hidden { display: none; }
 .lobby-card {
     width: 380px; max-width: calc(100vw - 32px);
     display: flex; flex-direction: column; gap: 16px;
