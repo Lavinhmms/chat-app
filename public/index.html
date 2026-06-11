@@ -8,9 +8,38 @@
 </head>
 <body>
 
+<!-- Lobby -->
+<div class="lobby" id="lobby">
+    <div class="lobby-card">
+        <div class="lobby-header">Huba Huba</div>
+        <div class="lobby-sub">Join or create a room</div>
+
+        <input id="lobbyName" class="lobby-input" placeholder="Your name" autocomplete="off" />
+
+        <div class="lobby-tabs">
+            <button class="lobby-tab active" data-tab="create">Create Room</button>
+            <button class="lobby-tab" data-tab="join">Join Room</button>
+        </div>
+
+        <div id="lobbyCreate" class="lobby-panel">
+            <input id="createRoomName" class="lobby-input" placeholder="Room name" autocomplete="off" />
+            <input id="createRoomPassword" class="lobby-input" type="password" placeholder="Password (optional)" autocomplete="off" />
+            <button id="createRoomBtn" class="lobby-btn">Create Room</button>
+        </div>
+
+        <div id="lobbyJoin" class="lobby-panel hidden">
+            <div id="roomList" class="room-list">
+                <div class="room-list-empty">Loading rooms...</div>
+            </div>
+        </div>
+
+        <div id="lobbyError" class="lobby-error hidden"></div>
+    </div>
+</div>
+
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-<div class="app">
+<div class="app hidden" id="app">
 
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
@@ -23,6 +52,21 @@
         </div>
         <div class="profile-box">
            <input id="username" placeholder="Enter your name" autocomplete="off" autofocus />
+           <input id="password" type="password" placeholder="Room password" autocomplete="off" class="hidden" />
+           <div id="authError" class="auth-error hidden"></div>
+        </div>
+        <div class="online-section">
+            <h3>Online</h3>
+            <ul id="users"></ul>
+        </div>
+        <div class="admin-section hidden" id="adminSection">
+            <h3>Admin</h3>
+            <div class="admin-row">
+                <input id="adminPassword" type="password" placeholder="New password" />
+                <button id="setPasswordBtn">Set</button>
+            </div>
+            <button id="clearPasswordBtn" class="hidden admin-link">Remove password</button>
+            <button id="endRoomBtn" class="admin-link end-room-btn">End Room</button>
         </div>
     </div>
 
@@ -32,7 +76,7 @@
         <!-- Top Bar -->
         <div class="top-bar">
             <button class="hamburger" id="hamburger" aria-label="Open menu">☰</button>
-            <div class="chat-header"><h2>Huba Hmmss</h2></div>
+            <div class="chat-header"><h2 id="roomTitle">Huba Hmmss</h2></div>
             <!-- Top right menu -->
             <div class="top-menu" id="topMenu">
                 <button class="top-menu-btn" id="topMenuBtn">≡</button>
@@ -129,11 +173,8 @@
             <button id="closeCallBtn"    class="win-btn win-close" title="Close">✕</button>
         </div>
     </div>
-    <!-- PIP row — collapsed small tiles -->
     <div class="call-pip-row" id="callPipRow"></div>
-    <!-- Expanded grid -->
     <div class="call-videos" id="callVideos"></div>
-    <!-- Controls — only shown when expanded -->
     <div class="call-controls">
         <button id="toggleMicBtn"    class="call-control-btn">🎤 Mute</button>
         <button id="toggleCameraBtn" class="call-control-btn">📷 Camera Off</button>

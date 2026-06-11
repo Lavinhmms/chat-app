@@ -8,139 +8,341 @@ const io     = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static("public"));
 
-let users     = {};
-let roomState = { videoId: null, playing: false, time: 0, updatedAt: Date.now() };
-let queue     = []; // max 6 items: { videoId, title, addedBy }
-let callUsers = {}; // socketId -> username (only users in call)
+const rooms = {};
+
+function getRoom(socket) {
+    return rooms[socket.roomId];
+}
+
+function cleanupDisconnectedUsers(room) {
+    if (!room) return;
+    Object.keys(room.users).forEach(id => {
+        const sock = io.sockets.sockets.get(id);
+        if (!sock || !sock.connected) {
+            delete room.users[id];
+            if (room.callUsers[id]) delete room.callUsers[id];
+            room.admins.delete(id);
+        }
+    });
+}
+
+// Periodic cleanup of stale rooms
+setInterval(() => {
+    Object.keys(rooms).forEach(roomId => {
+        const room = rooms[roomId];
+        cleanupDisconnectedUsers(room);
+        if (Object.keys(room.users).length === 0) {
+            delete rooms[roomId];
+        }
+    });
+}, 10000);
 
 io.on("connection", (socket) => {
+    socket.roomId = null;
 
-    // ── Chat / presence ───────────────────────────
-    socket.on("join", (username) => {
-        users[socket.id] = username;
-        io.emit("users", Object.values(users));
-        if (roomState.videoId) {
-            const elapsed = roomState.playing
-                ? (Date.now() - roomState.updatedAt) / 1000
-                : 0;
-            const syncTime = Math.max(0, roomState.time + elapsed);
-            console.log("Sending room state to new joiner:", roomState.videoId, "at", syncTime.toFixed(1) + "s");
-            socket.emit("room:state", {
-                videoId: roomState.videoId,
-                time:    syncTime,
-                playing: roomState.playing
-            });
-        }
-        socket.emit("video:queue-update", queue);
+    // ── Room management ──────────────────────────
+    socket.on("room:list", () => {
+        const list = Object.entries(rooms)
+            .filter(([id, room]) => Object.keys(room.users).length > 0)
+            .map(([id, room]) => ({
+                id,
+                userCount: Object.keys(room.users).length,
+                hasPassword: !!room.roomPassword
+            }));
+        socket.emit("room:list", list);
     });
 
-    socket.on("chat message", (data) => { io.emit("chat message", data); });
-    socket.on("typing",       (u)    => { socket.broadcast.emit("typing", u); });
-    socket.on("stop typing",  ()     => { socket.broadcast.emit("stop typing"); });
+    socket.on("room:create", ({ name, roomName, password }) => {
+        const roomId = (roomName || "").trim().toLowerCase().replace(/\s+/g, "-");
+        const username = (name || "").trim();
+        if (!roomId || !username) return;
+        if (rooms[roomId]) {
+            cleanupDisconnectedUsers(rooms[roomId]);
+            if (Object.keys(rooms[roomId].users).length > 0) {
+                socket.emit("auth:error", "Room name is taken");
+                return;
+            }
+        }
+        if (!rooms[roomId]) {
+            rooms[roomId] = {
+                users: {},
+                roomState: { videoId: null, playing: false, time: 0, updatedAt: Date.now() },
+                queue: [],
+                callUsers: {},
+                roomPassword: "",
+                admins: new Set()
+            };
+        }
+        const room = rooms[roomId];
+        room.roomPassword = password || "";
+        room.admins = new Set([socket.id]);
+        room.users = {};
+        room.roomState = { videoId: null, playing: false, time: 0, updatedAt: Date.now() };
+        room.queue = [];
+        room.callUsers = {};
+
+        socket.roomId = roomId;
+        socket.join(roomId);
+        room.users[socket.id] = username;
+
+        socket.emit("room:joined", {
+            roomId,
+            isAdmin: true,
+            hasPassword: !!room.roomPassword,
+            username,
+            users: Object.entries(room.users).map(([id, u]) => ({ id, username: u }))
+        });
+    });
+
+    socket.on("room:join", ({ roomId, name, password }) => {
+        const room = rooms[roomId];
+        const username = (name || "").trim();
+        if (!room) { socket.emit("auth:error", "Room not found"); return; }
+        if (!username) return;
+        if (room.roomPassword && password !== room.roomPassword) { socket.emit("auth:error", "Wrong password"); return; }
+
+        socket.roomId = roomId;
+        socket.join(roomId);
+        room.users[socket.id] = username;
+
+        if (!room.admins.size) {
+            room.admins.add(socket.id);
+        }
+
+        const isAdmin = room.admins.has(socket.id);
+        socket.emit("room:joined", {
+            roomId,
+            isAdmin,
+            hasPassword: !!room.roomPassword,
+            username,
+            users: Object.entries(room.users).map(([id, u]) => ({ id, username: u }))
+        });
+
+        socket.to(roomId).emit("users", Object.entries(room.users).map(([id, u]) => ({ id, username: u })));
+        socket.emit("auth:status", { hasPassword: !!room.roomPassword, isAdmin });
+
+        if (room.roomState.videoId) {
+            const elapsed = room.roomState.playing
+                ? (Date.now() - room.roomState.updatedAt) / 1000
+                : 0;
+            const syncTime = Math.max(0, room.roomState.time + elapsed);
+            socket.emit("room:state", { videoId: room.roomState.videoId, time: syncTime, playing: room.roomState.playing });
+        }
+        socket.emit("video:queue-update", room.queue);
+    });
+
+    // ── Auth ──────────────────────────────────────
+    socket.on("auth:set-password", (password) => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        room.roomPassword = password || "";
+        io.to(socket.roomId).emit("auth:password-updated", { hasPassword: !!room.roomPassword });
+    });
+
+    socket.on("auth:kick", (targetId) => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        if (room.users[targetId]) {
+            io.to(targetId).emit("auth:kicked");
+            const targetSocket = io.sockets.sockets.get(targetId);
+            if (targetSocket) targetSocket.disconnect(true);
+        }
+    });
+
+    // ── Chat / presence ───────────────────────────
+    socket.on("chat message", (data) => {
+        if (!socket.roomId) return;
+        io.to(socket.roomId).emit("chat message", data);
+    });
+    socket.on("typing", (u) => {
+        if (!socket.roomId) return;
+        socket.to(socket.roomId).emit("typing", u);
+    });
+    socket.on("stop typing", () => {
+        if (!socket.roomId) return;
+        socket.to(socket.roomId).emit("stop typing");
+    });
 
     // ── Video sync ────────────────────────────────
-    socket.on("video:load",  (id)   => { roomState = { videoId: id, playing: true,  time: 0, updatedAt: Date.now() }; socket.broadcast.emit("video:load",  id); });
-    socket.on("video:play",  (time) => { roomState = { ...roomState, playing: true,  time, updatedAt: Date.now() };   socket.broadcast.emit("video:play",  time); });
-    socket.on("video:pause", (time) => { roomState = { ...roomState, playing: false, time, updatedAt: Date.now() };   socket.broadcast.emit("video:pause", time); });
-    socket.on("video:seek",  (time) => { roomState = { ...roomState,                 time, updatedAt: Date.now() };   socket.broadcast.emit("video:seek",  time); });
-    socket.on("video:sync",  (time) => { roomState = { ...roomState, playing: true,   time, updatedAt: Date.now() };   socket.broadcast.emit("video:sync",  time); });
+    socket.on("video:load", (id) => {
+        const room = getRoom(socket);
+        if (!room) return;
+        room.roomState = { videoId: id, playing: true, time: 0, updatedAt: Date.now() };
+        socket.to(socket.roomId).emit("video:load", id);
+    });
+    socket.on("video:play", (time) => {
+        const room = getRoom(socket);
+        if (!room) return;
+        room.roomState = { ...room.roomState, playing: true, time, updatedAt: Date.now() };
+        socket.to(socket.roomId).emit("video:play", time);
+    });
+    socket.on("video:pause", (time) => {
+        const room = getRoom(socket);
+        if (!room) return;
+        room.roomState = { ...room.roomState, playing: false, time, updatedAt: Date.now() };
+        socket.to(socket.roomId).emit("video:pause", time);
+    });
+    socket.on("video:seek", (time) => {
+        const room = getRoom(socket);
+        if (!room) return;
+        room.roomState = { ...room.roomState, time, updatedAt: Date.now() };
+        socket.to(socket.roomId).emit("video:seek", time);
+    });
+    socket.on("video:sync", (time) => {
+        const room = getRoom(socket);
+        if (!room) return;
+        room.roomState = { ...room.roomState, playing: true, time, updatedAt: Date.now() };
+        socket.to(socket.roomId).emit("video:sync", time);
+    });
 
     // ── Video queue ──────────────────────────────
     socket.on("video:add-to-queue", (video) => {
-        if (queue.length >= 6) return;
-        queue.push(video);
-        io.emit("video:queue-update", queue);
+        const room = getRoom(socket);
+        if (!room) return;
+        if (room.queue.length >= 6) return;
+        room.queue.push(video);
+        io.to(socket.roomId).emit("video:queue-update", room.queue);
     });
 
     socket.on("video:remove-from-queue", (index) => {
-        if (index >= 0 && index < queue.length) {
-            queue.splice(index, 1);
-            io.emit("video:queue-update", queue);
+        const room = getRoom(socket);
+        if (!room) return;
+        if (index >= 0 && index < room.queue.length) {
+            room.queue.splice(index, 1);
+            io.to(socket.roomId).emit("video:queue-update", room.queue);
         }
     });
 
     socket.on("video:next-from-queue", () => {
-        if (queue.length > 0) {
-            const next = queue.shift();
-            roomState = { videoId: next.videoId, playing: true, time: 0, updatedAt: Date.now() };
-            io.emit("video:queue-update", queue);
-            io.emit("video:load", next.videoId);
-            io.emit("video:next-playing", next.title || "Next video");
+        const room = getRoom(socket);
+        if (!room) return;
+        if (room.queue.length > 0) {
+            const next = room.queue.shift();
+            room.roomState = { videoId: next.videoId, playing: true, time: 0, updatedAt: Date.now() };
+            io.to(socket.roomId).emit("video:queue-update", room.queue);
+            io.to(socket.roomId).emit("video:load", next.videoId);
+            io.to(socket.roomId).emit("video:next-playing", next.title || "Next video");
         }
     });
 
     // ── WebRTC signaling ──────────────────────────
-
-    // User joins the call
     socket.on("call:join", (username) => {
-        callUsers[socket.id] = username;
-        // Tell this user about everyone already in the call
-        const others = Object.entries(callUsers)
+        const room = getRoom(socket);
+        if (!room) return;
+        room.callUsers[socket.id] = username;
+        const others = Object.entries(room.callUsers)
             .filter(([id]) => id !== socket.id)
             .map(([id, name]) => ({ socketId: id, username: name }));
         socket.emit("call:existing-users", others);
-        // Tell everyone else a new user joined
-        socket.broadcast.emit("call:user-joined", { socketId: socket.id, username });
-        io.emit("call:participants", Object.keys(callUsers).length);
+        socket.to(socket.roomId).emit("call:user-joined", { socketId: socket.id, username });
+        io.to(socket.roomId).emit("call:participants", Object.keys(room.callUsers).length);
     });
 
-    // Leave the call
     socket.on("call:leave", () => {
-        delete callUsers[socket.id];
-        socket.broadcast.emit("call:user-left", socket.id);
-        io.emit("call:participants", Object.keys(callUsers).length);
+        const room = getRoom(socket);
+        if (!room) return;
+        delete room.callUsers[socket.id];
+        socket.to(socket.roomId).emit("call:user-left", socket.id);
+        io.to(socket.roomId).emit("call:participants", Object.keys(room.callUsers).length);
     });
 
-    // WebRTC offer (sent to specific peer)
     socket.on("call:offer", ({ to, offer }) => {
         io.to(to).emit("call:offer", { from: socket.id, offer });
     });
 
-    // WebRTC answer (sent to specific peer)
     socket.on("call:answer", ({ to, answer }) => {
         io.to(to).emit("call:answer", { from: socket.id, answer });
     });
 
-    // ICE candidate (sent to specific peer)
     socket.on("call:ice-candidate", ({ to, candidate }) => {
         io.to(to).emit("call:ice-candidate", { from: socket.id, candidate });
     });
 
     // ── Call ringing ────────────────────────────
     socket.on("call:ring", (data) => {
-        socket.broadcast.emit("call:incoming", {
-            from: socket.id,
-            username: data.username
-        });
+        socket.to(socket.roomId).emit("call:incoming", { from: socket.id, username: data.username });
     });
 
     socket.on("call:cancel", () => {
-        socket.broadcast.emit("call:canceled");
+        socket.to(socket.roomId).emit("call:canceled");
     });
 
     socket.on("call:accept", (data) => {
-        io.to(data.to).emit("call:accepted", {
-            socketId: socket.id,
-            username: users[socket.id] || "Unknown"
-        });
+        const room = getRoom(socket);
+        io.to(data.to).emit("call:accepted", { socketId: socket.id, username: room ? (room.users[socket.id] || "Unknown") : "Unknown" });
     });
 
     socket.on("call:reject", (data) => {
-        io.to(data.to).emit("call:rejected", {
-            socketId: socket.id,
-            username: users[socket.id] || "Unknown"
+        const room = getRoom(socket);
+        io.to(data.to).emit("call:rejected", { socketId: socket.id, username: room ? (room.users[socket.id] || "Unknown") : "Unknown" });
+    });
+
+    // ── Leave room ─────────────────────────────────
+    socket.on("room:leave", (data) => {
+        const roomId = (data && data.roomId) || socket.roomId;
+        if (!roomId) return;
+        const room = rooms[roomId];
+        if (room) {
+            delete room.users[socket.id];
+            if (room.callUsers[socket.id]) {
+                delete room.callUsers[socket.id];
+                socket.to(roomId).emit("call:user-left", socket.id);
+                io.to(roomId).emit("call:participants", Object.keys(room.callUsers).length);
+            }
+            socket.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
+            const wasAdmin = room.admins.has(socket.id);
+            if (wasAdmin) {
+                room.admins.delete(socket.id);
+                if (Object.keys(room.users).length > 0) {
+                    const newAdminId = Object.keys(room.users)[0];
+                    room.admins.add(newAdminId);
+                    io.to(newAdminId).emit("auth:status", { hasPassword: !!room.roomPassword, isAdmin: true });
+                    io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
+                }
+            }
+            if (Object.keys(room.users).length === 0) {
+                delete rooms[roomId];
+            }
+        }
+        socket.leave(roomId);
+        socket.roomId = null;
+    });
+
+    // ── End room ──────────────────────────────────
+    socket.on("room:end", () => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        io.to(socket.roomId).emit("room:ended");
+        Object.keys(room.users).forEach(id => {
+            const s = io.sockets.sockets.get(id);
+            if (s) s.disconnect(true);
         });
+        delete rooms[socket.roomId];
     });
 
     // ── Disconnect ────────────────────────────────
     socket.on("disconnect", () => {
-        delete users[socket.id];
-        socket.broadcast.emit("call:canceled");
-        io.emit("users", Object.values(users));
-        if (callUsers[socket.id]) {
-            delete callUsers[socket.id];
-            socket.broadcast.emit("call:user-left", socket.id);
-            io.emit("call:participants", Object.keys(callUsers).length);
+        const roomId = socket.roomId;
+        const room = rooms[roomId];
+        if (!room) return;
+
+        const wasAdmin = room.admins.has(socket.id);
+        if (wasAdmin) room.admins.delete(socket.id);
+        delete room.users[socket.id];
+        socket.to(roomId).emit("call:canceled");
+        io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
+        if (room.callUsers[socket.id]) {
+            delete room.callUsers[socket.id];
+            socket.to(roomId).emit("call:user-left", socket.id);
+            io.to(roomId).emit("call:participants", Object.keys(room.callUsers).length);
+        }
+        if (!room.admins.size && Object.keys(room.users).length > 0) {
+            room.admins.add(Object.keys(room.users)[0]);
+            io.to(Object.keys(room.users)[0]).emit("auth:status", { hasPassword: !!room.roomPassword, isAdmin: true });
+            io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
+        }
+        if (Object.keys(room.users).length === 0) {
+            delete rooms[roomId];
         }
     });
 });

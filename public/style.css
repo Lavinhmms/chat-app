@@ -11,6 +11,83 @@ body {
 body.dark  { background: #000; color: white; }
 body.light { background: #f1f5f9; color: #111827; }
 
+/* LOBBY */
+.lobby {
+    position: fixed; inset: 0; z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+    background: #050510;
+}
+.lobby-card {
+    width: 380px; max-width: calc(100vw - 32px);
+    display: flex; flex-direction: column; gap: 16px;
+    padding: 32px; border-radius: 20px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.lobby-header {
+    font-size: 32px; font-weight: bold; color: #38bdf8;
+    text-align: center;
+}
+.lobby-sub {
+    font-size: 13px; color: rgba(255,255,255,0.4);
+    text-align: center; margin-top: -8px;
+}
+.lobby-input {
+    width: 100%; height: 44px; padding: 0 14px;
+    border: none; outline: none; border-radius: 12px;
+    font-size: 15px; background: rgba(255,255,255,0.08); color: white;
+}
+.lobby-input::placeholder { color: rgba(255,255,255,0.35); }
+.lobby-tabs {
+    display: flex; gap: 6px;
+}
+.lobby-tab {
+    flex: 1; height: 38px; border: none; border-radius: 10px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5);
+    font-size: 13px; font-weight: bold; cursor: pointer;
+    transition: all 0.15s;
+}
+.lobby-tab.active {
+    background: rgba(56,189,248,0.2); color: #38bdf8;
+}
+.lobby-tab:hover { background: rgba(255,255,255,0.1); }
+.lobby-panel {
+    display: flex; flex-direction: column; gap: 10px;
+}
+.lobby-panel.hidden { display: none; }
+.lobby-btn {
+    width: 100%; height: 44px; border: none; border-radius: 12px;
+    background: #2563eb; color: white; font-size: 15px; font-weight: bold;
+    cursor: pointer; transition: background 0.15s;
+}
+.lobby-btn:hover { background: #1d4ed8; }
+.lobby-btn:disabled { opacity: 0.5; cursor: default; }
+.lobby-error {
+    font-size: 12px; color: #f87171; text-align: center;
+    padding: 4px 0;
+}
+.lobby-error.hidden { display: none; }
+.room-list {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 180px; overflow-y: auto;
+}
+.room-list-empty {
+    font-size: 13px; color: rgba(255,255,255,0.3);
+    text-align: center; padding: 20px 0;
+}
+.room-list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.06); cursor: pointer;
+    transition: background 0.15s;
+}
+.room-list-item:hover { background: rgba(255,255,255,0.12); }
+.room-list-name { font-size: 14px; color: white; font-weight: bold; }
+.room-list-meta { font-size: 11px; color: rgba(255,255,255,0.4); }
+.room-list-pw { font-size: 11px; color: #fbbf24; margin-left: 8px; }
+
+.app.hidden { display: none; }
+
 /* APP */
 .app {
     display: flex;
@@ -54,11 +131,56 @@ body.light .sidebar::after { background: rgba(0,0,0,0.08); }
 #themeToggle { width: 45px; height: 45px; border: none; border-radius: 12px; background: #2563eb; color: white; cursor: pointer; font-size: 18px; }
 
 /* INPUTS */
-.profile-box { width: 100%; }
+.profile-box { width: 100%; display: flex; flex-direction: column; gap: 10px; }
 .profile-box input, #input {
     width: 100%; padding: 14px; border: none; outline: none;
     border-radius: 14px; font-size: 16px;
 }
+.auth-error {
+    font-size: 12px; color: #f87171; padding: 4px 0;
+    text-align: center;
+}
+.auth-error.hidden { display: none; }
+
+/* ONLINE SECTION */
+.online-section { position: relative; z-index: 2; margin-top: 16px; flex: 1; min-height: 0; overflow-y: auto; }
+.online-section h3 { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+.online-section ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.online-section li {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; border-radius: 10px;
+    font-size: 13px; color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.06);
+}
+.online-section li .kick-btn {
+    width: 28px; height: 28px; border: none; border-radius: 8px;
+    background: rgba(220,38,38,0.3); color: #fca5a5;
+    font-size: 11px; cursor: pointer; flex-shrink: 0;
+    display: none; align-items: center; justify-content: center;
+}
+.online-section li .kick-btn:hover { background: rgba(220,38,38,0.6); }
+body.light .online-section li { background: rgba(0,0,0,0.06); color: #374151; }
+
+/* ADMIN SECTION */
+.admin-section { position: relative; z-index: 2; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+.admin-section.hidden { display: none; }
+.admin-section h3 { font-size: 12px; color: #fbbf24; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+.admin-row { display: flex; gap: 6px; }
+.admin-row input {
+    flex: 1; height: 34px; padding: 0 10px; border: none; outline: none;
+    border-radius: 8px; font-size: 12px; background: rgba(255,255,255,0.1); color: white;
+}
+body.light .admin-row input { background: rgba(0,0,0,0.08); color: #111; }
+#setPasswordBtn {
+    width: auto; height: 34px; padding: 0 14px; border-radius: 8px;
+    background: #2563eb; color: white; font-size: 11px; font-weight: bold;
+}
+.admin-link {
+    width: auto; height: auto; padding: 4px 0; background: none;
+    color: #f87171; font-size: 11px; cursor: pointer; text-decoration: underline;
+    border: none; margin-top: 6px;
+}
+.admin-link.hidden { display: none; }
 
 /* MAIN AREA */
 .main-area {
@@ -579,6 +701,12 @@ body.light .hamburger { background: rgba(0,0,0,0.1); color: #111; }
     .logo-row h2 { font-size: 20px; }
     #themeToggle { width: 32px; height: 32px; font-size: 14px; border-radius: 8px; }
     .profile-box input { height: 36px; padding: 0 10px; font-size: 13px; border-radius: 10px; }
+    .online-section { margin-top: 10px; }
+    .online-section li { padding: 4px 8px; font-size: 12px; }
+    .admin-section { margin-top: 8px; padding-top: 8px; }
+    .admin-row input { height: 30px; font-size: 11px; }
+    #setPasswordBtn { height: 30px; padding: 0 10px; font-size: 10px; }
+    .profile-box { gap: 6px; }
 }
 
 /* call-btn styles now in .call-item dropdown */

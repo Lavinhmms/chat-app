@@ -4,44 +4,280 @@ const input         = document.getElementById("input");
 const username      = document.getElementById("username");
 const chat          = document.getElementById("chat");
 const usersList     = document.getElementById("users");
+let   isAdmin       = false;
 
 /* ===================================
-   LOGIN LOCK
+   LOBBY — Create / Join Room
 =================================== */
 
-const usernameInput = document.getElementById("username");
+const lobby         = document.getElementById("lobby");
+const lobbyName     = document.getElementById("lobbyName");
+const lobbyError    = document.getElementById("lobbyError");
+const createTab     = document.querySelector('[data-tab="create"]');
+const joinTab       = document.querySelector('[data-tab="join"]');
+const lobbyCreate   = document.getElementById("lobbyCreate");
+const lobbyJoin     = document.getElementById("lobbyJoin");
+const createRoomName = document.getElementById("createRoomName");
+const createRoomPassword = document.getElementById("createRoomPassword");
+const createRoomBtn = document.getElementById("createRoomBtn");
+const roomList      = document.getElementById("roomList");
+const app           = document.getElementById("app");
+const roomTitle     = document.getElementById("roomTitle");
 
-usernameInput.focus();
+let currentRoomId = null;
+let lastRoomId = null;
+let intentionalLeave = false;
+
+lobbyName.focus();
+
+// ── Lobby tab toggle ──
+let roomListInterval = null;
+document.querySelectorAll(".lobby-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+        document.querySelectorAll(".lobby-tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        lobbyCreate.classList.toggle("hidden", tab.dataset.tab !== "create");
+        lobbyJoin.classList.toggle("hidden", tab.dataset.tab !== "join");
+        if (roomListInterval) { clearInterval(roomListInterval); roomListInterval = null; }
+        if (tab.dataset.tab === "join") {
+            refreshRoomList();
+            roomListInterval = setInterval(refreshRoomList, 5000);
+        }
+    });
+});
+
+// ── Create room ──
+createRoomBtn.addEventListener("click", () => {
+    const name = lobbyName.value.trim();
+    const roomName = createRoomName.value.trim();
+    if (!name) { showLobbyError("Enter your name"); return; }
+    if (!roomName) { showLobbyError("Enter a room name"); return; }
+    showLobbyError("");
+    createRoomBtn.disabled = true;
+    createRoomBtn.textContent = "Creating...";
+    socket.emit("room:create", { name, roomName, password: createRoomPassword.value });
+});
+
+createRoomName.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") createRoomBtn.click();
+});
+createRoomPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") createRoomBtn.click();
+});
+
+// ── Join room ──
+function refreshRoomList() {
+    socket.emit("room:list");
+}
+
+socket.on("room:list", (rooms) => {
+    if (rooms.length === 0) {
+        roomList.innerHTML = '<div class="room-list-empty">No rooms available. Create one!</div>';
+        return;
+    }
+    roomList.innerHTML = "";
+    rooms.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "room-list-item";
+        div.innerHTML = `
+            <div>
+                <div class="room-list-name">${r.id}</div>
+                <div class="room-list-meta">${r.userCount} user${r.userCount !== 1 ? 's' : ''}</div>
+            </div>
+            ${r.hasPassword ? '<span class="room-list-pw">🔒</span>' : ''}
+        `;
+        div.addEventListener("click", () => joinRoom(r.id, r.hasPassword));
+        roomList.appendChild(div);
+    });
+});
+
+function joinRoom(roomId, hasPassword) {
+    const name = lobbyName.value.trim();
+    if (!name) { showLobbyError("Enter your name first"); return; }
+    if (hasPassword) {
+        const pw = prompt("Enter room password:");
+        if (pw === null) return;
+        socket.emit("room:join", { roomId, name, password: pw });
+    } else {
+        socket.emit("room:join", { roomId, name, password: "" });
+    }
+}
+
+// ── Lobby error ──
+function showLobbyError(msg) {
+    lobbyError.textContent = msg;
+    lobbyError.classList.toggle("hidden", !msg);
+}
+
+// ── Room joined ──
+socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name, users }) => {
+    createRoomBtn.disabled = false;
+    createRoomBtn.textContent = "Create Room";
+    lobby.classList.add("hidden");
+    app.classList.remove("hidden");
+    currentRoomId = roomId;
+    roomTitle.textContent = roomId;
+
+    username.value = name;
+    isAdmin = admin;
+
+    // Password field visibility
+    document.getElementById("password").classList.toggle("hidden", !hasPassword);
+    document.getElementById("password").placeholder = "Room password";
+    document.getElementById("password").value = "";
+
+    // Admin section
+    if (admin) {
+        document.getElementById("adminSection").classList.remove("hidden");
+        document.querySelector(".online-section h3").textContent = "Online (you are admin)";
+    }
+
+    // Populate users
+    if (users) {
+        const ul = document.getElementById("users");
+        ul.innerHTML = "";
+        users.forEach(({ id, username: name }) => {
+            const li = document.createElement("li");
+            li.innerHTML = "<span>🟢 " + name + "</span>";
+            if (admin && id !== socket.id) {
+                const kickBtn = document.createElement("button");
+                kickBtn.className = "kick-btn";
+                kickBtn.textContent = "✕";
+                kickBtn.title = "Kick " + name;
+                kickBtn.addEventListener("click", () => {
+                    if (confirm("Kick " + name + "?")) socket.emit("auth:kick", id);
+                });
+                li.appendChild(kickBtn);
+            }
+            ul.appendChild(li);
+        });
+    }
+
+    // Unlock chat
+    document.getElementById("input").disabled = false;
+    document.getElementById("emojiBtn").disabled = false;
+    document.querySelector("#form button[type='submit']").disabled = false;
+    document.getElementById("input").focus();
+
+    // Reset video state for fresh join
+    currentVideoId = null;
+    queueList = [];
+    renderQueue();
+});
+
+// ── Room ended ──
+socket.on("room:ended", () => {
+    goToLobby("Room ended by admin");
+});
+
+// ── Leave room button (top menu) ──
+function goToLobby(msg) {
+    if (inCall) leaveCall();
+    stopRingtone();
+    incomingCallOverlay.classList.add("hidden");
+    closeVideoPanel();
+    callPanel.classList.add("hidden");
+    app.classList.add("hidden");
+    lobby.classList.remove("hidden");
+    createRoomBtn.disabled = false;
+    createRoomBtn.textContent = "Create Room";
+    if (currentRoomId) {
+        intentionalLeave = true;
+        lastRoomId = currentRoomId;
+        socket.emit("room:leave");
+        currentRoomId = null;
+    }
+    isAdmin = false;
+    document.getElementById("adminSection").classList.add("hidden");
+    document.querySelector(".online-section h3").textContent = "Online";
+    document.getElementById("users").innerHTML = "";
+    document.getElementById("chat").innerHTML = "";
+    if (msg) showLobbyError(msg);
+    else showLobbyError("");
+    lobbyName.focus();
+}
+
+// Add leave room to top menu dropdown
+const leaveBtn = document.createElement("button");
+leaveBtn.className = "dropdown-item";
+leaveBtn.style.cssText = "background:rgba(220,38,38,0.2);color:#fca5a5;";
+leaveBtn.innerHTML = "🚪 Leave Room";
+leaveBtn.addEventListener("click", () => {
+    topMenuDropdown.classList.add("hidden");
+    goToLobby("");
+});
+document.getElementById("topMenuDropdown").appendChild(leaveBtn);
+
+// ── Socket disconnect ──
+socket.on("disconnect", () => {
+    if (intentionalLeave) { intentionalLeave = false; return; }
+    goToLobby("Disconnected from server");
+});
+
+socket.on("connect", () => {
+    // Clean up stale room from previous session if room:leave didn't arrive
+    if (lastRoomId) {
+        socket.emit("room:leave", { roomId: lastRoomId });
+        lastRoomId = null;
+    }
+    if (!lobby.classList.contains("hidden")) return;
+    // Reconnected while in a room — go back to lobby
+    goToLobby("Reconnected");
+});
+
+/* ===================================
+   LOGIN LOCK — now handled by lobby
+=================================== */
+
+const passwordInput = document.getElementById("password");
+const authError     = document.getElementById("authError");
 
 document.getElementById("input").disabled = true;
 document.getElementById("emojiBtn").disabled = true;
-
 document.querySelector("#form button[type='submit']").disabled = true;
 
-function unlockApp() {
-    const name = usernameInput.value.trim();
-
-    if (!name) return;
-
-    document.getElementById("input").disabled = false;
-    document.getElementById("emojiBtn").disabled = false;
-
-    document.querySelector("#form button[type='submit']").disabled = false;
-
-    socket.emit("join", name);
-}
-
-usernameInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        unlockApp();
-        document.getElementById("input").focus();
+socket.on("auth:status", ({ hasPassword, isAdmin: admin }) => {
+    document.getElementById("password").classList.toggle("hidden", !hasPassword);
+    if (hasPassword) {
+        document.getElementById("password").placeholder = "Room password";
+    }
+    if (admin) {
+        isAdmin = true;
+        document.getElementById("adminSection").classList.remove("hidden");
+        document.querySelector(".online-section h3").textContent = "Online (you are admin)";
     }
 });
 
-usernameInput.addEventListener("blur", () => {
-    if (usernameInput.value.trim()) {
-        unlockApp();
-    }
+socket.on("auth:error", (msg) => {
+    createRoomBtn.disabled = false;
+    createRoomBtn.textContent = "Create Room";
+    showLobbyError(msg);
+    setTimeout(() => showLobbyError(""), 3000);
+});
+
+socket.on("auth:kicked", () => {
+    intentionalLeave = true;
+    goToLobby("You have been kicked from the room");
+});
+
+socket.on("auth:password-updated", ({ hasPassword }) => {
+    document.getElementById("password").classList.toggle("hidden", !hasPassword);
+    document.getElementById("password").placeholder = "Room password";
+    document.getElementById("password").value = "";
+    document.getElementById("adminPassword").value = "";
+    document.getElementById("clearPasswordBtn").classList.toggle("hidden", !hasPassword);
+});
+
+document.getElementById("setPasswordBtn").addEventListener("click", () => {
+    const pw = document.getElementById("adminPassword").value;
+    socket.emit("auth:set-password", pw);
+});
+document.getElementById("clearPasswordBtn").addEventListener("click", () => {
+    if (confirm("Remove room password?")) socket.emit("auth:set-password", "");
+});
+
+document.getElementById("endRoomBtn").addEventListener("click", () => {
+    if (confirm("End the room for everyone?")) socket.emit("room:end");
 });
 
 const typingIndicator = document.getElementById("typingIndicator");
@@ -188,12 +424,22 @@ socket.on("typing",      (u) => { typingIndicator.textContent = u + " is typing.
 socket.on("stop typing", ()  => { typingIndicator.textContent = ""; document.getElementById("vchatTyping").textContent = ""; });
 
 // ── Users ─────────────────────────────────────────
-socket.on("users", (users) => {
+socket.on("users", (userList) => {
     if (!usersList) return;
     usersList.innerHTML = "";
-    users.forEach(u => {
+    userList.forEach(({ id, username: name }) => {
         const li = document.createElement("li");
-        li.textContent = "🟢 " + u;
+        li.innerHTML = "<span>🟢 " + name + "</span>";
+        if (isAdmin && id !== socket.id) {
+            const kickBtn = document.createElement("button");
+            kickBtn.className = "kick-btn";
+            kickBtn.textContent = "✕";
+            kickBtn.title = "Kick " + name;
+            kickBtn.addEventListener("click", () => {
+                if (confirm("Kick " + name + "?")) socket.emit("auth:kick", id);
+            });
+            li.appendChild(kickBtn);
+        }
         usersList.appendChild(li);
     });
 });
@@ -235,7 +481,6 @@ let pendingSeekTime  = null;
 let pendingPaused    = false;
 let currentVideoId   = null;
 
-// Remote action flags — suppress the immediate next state change caused by a remote action
 let pendingRemotePlay = false;
 let pendingRemotePause = false;
 let remotePlayTimeout = null;
@@ -336,7 +581,6 @@ window.onYouTubeIframeAPIReady = function() {
     });
 };
 
-// ── Core: open panel THEN load video ─────────────
 function playVideoById(videoId, seekTime, paused) {
     currentVideoId = videoId;
     videoEmpty.classList.add("hidden");
@@ -363,7 +607,6 @@ function playVideoById(videoId, seekTime, paused) {
     }
 }
 
-// ── Blocked message ───────────────────────────────
 function showBlockedMessage(videoId) {
     hideBlockedMessage();
     const msg = document.createElement("div");
@@ -384,7 +627,6 @@ function hideBlockedMessage() {
     if (el) el.remove();
 }
 
-// ── Extract YouTube ID ────────────────────────────
 function extractVideoId(url) {
     const patterns = [
         /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
@@ -397,11 +639,9 @@ function extractVideoId(url) {
     return null;
 }
 
-// ── Open video panel ──────────────────────────────
 function openVideoPanel() {
     videoPanel.classList.remove("hidden");
     contentArea.classList.add("video-open");
-    // Hide separate call panel — call is in video panel's call tab
     if (inCall) callPanel.classList.add("hidden");
 }
 function closeVideoPanel() {
@@ -409,30 +649,26 @@ function closeVideoPanel() {
     contentArea.classList.remove("video-open");
     searchResults.classList.add("hidden");
     hideBlockedMessage();
-    // Restore separate call panel if in call
     if (inCall) callPanel.classList.remove("hidden");
 }
 
-// ── Load video (by this user) ─────────────────────
 function loadVideo(videoId, title) {
     searchResults.classList.add("hidden");
     videoInput.value = "";
-    openVideoPanel();                    // open panel FIRST
+    openVideoPanel();
 
-    // If a video is already loaded, add to queue instead
     if (currentVideoId !== null) {
         addToQueue(videoId, title);
         setTimeout(() => videoInput.focus(), 300);
         return;
     }
 
-    playVideoById(videoId, 0, false);    // then load video
+    playVideoById(videoId, 0, false);
     videoStatus.textContent = title ? ("🎬 " + title) : "🎬 Watching together!";
     socket.emit("video:load", videoId);
     setTimeout(() => videoInput.focus(), 300);
 }
 
-// ── Queue functions ──────────────────────────────
 function addToQueue(videoId, title) {
     if (queueList.length >= 6) return;
     const item = { videoId, title: title || "Untitled", addedBy: username.value };
@@ -464,7 +700,6 @@ queueHeader.addEventListener("click", () => {
     videoQueue.classList.toggle("collapsed");
 });
 
-// ── Resizable video bottom ────────────────────────
 const videoBottom   = document.getElementById("videoBottom");
 const bottomResize  = document.getElementById("bottomResize");
 let isResizing      = false;
@@ -493,7 +728,6 @@ function stopResize() {
     document.removeEventListener("mouseup", stopResize);
 }
 
-// ── Search ────────────────────────────────────────
 const INVIDIOUS = [
     "https://invidious.privacyredirect.com",
     "https://invidious.fdn.fr",
@@ -552,24 +786,20 @@ document.addEventListener("click", (e) => {
         searchResults.classList.add("hidden");
 });
 
-// ── Socket sync (received FROM other users) ───────
-
-// Late joiner — get current room state
+// ── Socket sync ──────────────────────────────────
 socket.on("room:state", (state) => {
     if (!state.videoId) return;
-    openVideoPanel();                                      // open panel first
+    openVideoPanel();
     playVideoById(state.videoId, state.time, !state.playing);
     videoStatus.textContent = "🎬 Synced with room!";
 });
 
-// Someone loaded a new video
 socket.on("video:load", (videoId) => {
-    openVideoPanel();                                      // open panel first
+    openVideoPanel();
     playVideoById(videoId, 0, false);
     videoStatus.textContent = "🎬 Watching together!";
 });
 
-// Play / pause / seek sync
 socket.on("video:play", (time) => {
     if (!player || !playerReady) return;
     setPendingRemotePlay();
@@ -595,7 +825,6 @@ socket.on("video:sync", (time) => {
     }
 });
 
-// ── Queue socket sync ────────────────────────────
 socket.on("video:queue-update", (q) => {
     queueList = q;
     renderQueue();
@@ -605,11 +834,7 @@ socket.on("video:next-playing", (title) => {
     videoStatus.textContent = "▶️ " + title;
 });
 
-// ── Close video panel (top-right ✕) ─────────────
-
-
-// ── Video bottom tabs ──────────────────────────────
-// ── Video panel chat ───────────────────────────────
+// ── Video panel chat ──────────────────────────────
 const vform = document.getElementById("vform");
 const vinput = document.getElementById("vinput");
 const vchatMsgs = document.getElementById("vchatMsgs");
@@ -643,7 +868,6 @@ vemojiBtn.addEventListener("click", (e) => {
 const callPanel       = document.getElementById("callPanel");
 const callVideos      = document.getElementById("callVideos");
 const callPipRow      = document.getElementById("callPipRow");
-const endCallBtn      = document.getElementById("endCallBtn");
 const joinCallBtn     = document.getElementById("joinCallBtn");
 const toggleMicBtn    = document.getElementById("toggleMicBtn");
 const toggleCameraBtn = document.getElementById("toggleCameraBtn");
@@ -655,7 +879,6 @@ let   isCalling       = false;
 let   incomingCallFrom = null;
 let   callRingTimeout  = null;
 
-// Incoming call overlay DOM refs
 const incomingCallOverlay = document.getElementById("incomingCallOverlay");
 const incomingCallAvatar  = document.getElementById("incomingCallAvatar");
 const incomingCallName    = document.getElementById("incomingCallName");
@@ -663,7 +886,6 @@ const incomingCallStatus  = document.getElementById("incomingCallStatus");
 const acceptCallBtn       = document.getElementById("acceptCallBtn");
 const declineCallBtn      = document.getElementById("declineCallBtn");
 
-// WebRTC config — using free public STUN servers
 const RTC_CONFIG = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -672,8 +894,8 @@ const RTC_CONFIG = {
     ]
 };
 
-let localStream    = null;   // my camera/mic stream
-let peers          = {};     // socketId -> RTCPeerConnection
+let localStream    = null;
+let peers          = {};
 let inCall         = false;
 let micEnabled     = true;
 let cameraEnabled  = true;
@@ -730,13 +952,11 @@ function cancelCall() {
     joinCallBtn.classList.remove("active");
 }
 
-// ── Panel toggle ──────────────────────────────────
 exploreBtn.addEventListener("click", () => {
     topMenuDropdown.classList.add("hidden");
     videoPanel.classList.contains("hidden") ? openVideoPanel() : closeVideoPanel();
 });
 
-// ── Accept / Decline incoming call ────────────────
 acceptCallBtn.addEventListener("click", () => {
     if (!incomingCallFrom) return;
     stopRingtone();
@@ -757,37 +977,31 @@ declineCallBtn.addEventListener("click", () => {
     incomingCallFrom = null;
 });
 
-// ── Window control buttons ────────────────────────
 const minimizeCallBtn = document.getElementById("minimizeCallBtn");
 const maximizeCallBtn = document.getElementById("maximizeCallBtn");
 const closeCallBtn    = document.getElementById("closeCallBtn");
 
 let isMinimized = false;
 let isMaximized = false;
-// Store pre-maximize position to restore later
 let preMaxState = { left: null, top: null };
 
-// Minimize — show only header bar
 minimizeCallBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (isMaximized) return; // can't minimize while maximized
+    if (isMaximized) return;
     isMinimized = !isMinimized;
     callPanel.classList.toggle("minimized", isMinimized);
     minimizeCallBtn.title = isMinimized ? "Restore" : "Minimize";
     minimizeCallBtn.style.background = isMinimized ? "#94a3b8" : "#fbbf24";
 });
 
-// Maximize — go fullscreen, or restore back
 maximizeCallBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (isMinimized) {
-        // Restore from minimized first
         isMinimized = false;
         callPanel.classList.remove("minimized");
     }
     isMaximized = !isMaximized;
     if (isMaximized) {
-        // Save current position before maximizing
         preMaxState = { left: callPanel.style.left, top: callPanel.style.top };
         callPanel.classList.add("maximized");
         callPanel.classList.remove("expanded");
@@ -795,7 +1009,6 @@ maximizeCallBtn.addEventListener("click", (e) => {
         maximizeCallBtn.textContent = "⧉";
     } else {
         callPanel.classList.remove("maximized");
-        // Restore previous position
         if (preMaxState.left) callPanel.style.left = preMaxState.left;
         if (preMaxState.top)  callPanel.style.top  = preMaxState.top;
         maximizeCallBtn.title = "Maximize";
@@ -803,7 +1016,6 @@ maximizeCallBtn.addEventListener("click", (e) => {
     }
 });
 
-// Close — leave call and hide panel
 closeCallBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (isCalling) cancelCall();
@@ -814,7 +1026,6 @@ closeCallBtn.addEventListener("click", (e) => {
     isMaximized = false;
 });
 
-// Header click — expand/collapse PIP (only when not minimized/maximized)
 callPanelHeader.addEventListener("click", (e) => {
     if (e.target === minimizeCallBtn || e.target === maximizeCallBtn || e.target === closeCallBtn) return;
     if (dragged) { dragged = false; return; }
@@ -823,7 +1034,6 @@ callPanelHeader.addEventListener("click", (e) => {
     callPanel.classList.toggle("expanded", callExpanded);
 });
 
-// ── Drag to move call panel ───────────────────────
 let dragged   = false;
 let dragStartX = 0, dragStartY = 0;
 let panelStartX = 0, panelStartY = 0;
@@ -845,7 +1055,6 @@ function startDrag(e) {
     panelStartX = rect.left;
     panelStartY = rect.top;
 
-    // Switch from bottom/right anchoring to top/left for free movement
     callPanel.style.right  = "auto";
     callPanel.style.bottom = "auto";
     callPanel.style.left   = rect.left + "px";
@@ -869,7 +1078,6 @@ function onDrag(e) {
 
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragged = true;
 
-    // Clamp within viewport
     const rect   = callPanel.getBoundingClientRect();
     const newLeft = Math.max(0, Math.min(window.innerWidth  - rect.width,  panelStartX + dx));
     const newTop  = Math.max(0, Math.min(window.innerHeight - rect.height, panelStartY + dy));
@@ -886,8 +1094,6 @@ function stopDrag() {
     document.removeEventListener("touchend",  stopDrag);
 }
 
-
-
 // ── Join call ─────────────────────────────────────
 async function joinCall() {
     if (inCall) return;
@@ -895,9 +1101,9 @@ async function joinCall() {
         alert("Please enter your name first!");
         return;
     }
+    inCall = true;
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640, max: 640 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 15, max: 20 } }, audio: true });
-        inCall = true;
         joinCallBtn.textContent = "✅ In Call";
         joinCallBtn.classList.remove("active");
         joinCallBtn.classList.add("in-call-state");
@@ -906,8 +1112,14 @@ async function joinCall() {
 
         addVideoTile(socket.id, username.value, localStream, true);
 
+        Object.values(peers).forEach(pc => {
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        });
+
         socket.emit("call:join", username.value);
     } catch(e) {
+        inCall = false;
+        leaveCall();
         alert("Camera/mic access denied. Please allow permissions and try again.");
         console.error(e);
     }
@@ -926,21 +1138,17 @@ function leaveCall() {
     if (!inCall) return;
     inCall = false;
 
-    // Stop all tracks
     if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
         localStream = null;
     }
 
-    // Close all peer connections
     Object.values(peers).forEach(pc => pc.close());
     peers = {};
 
-    // Clear video grids
     callVideos.innerHTML = "";
     callPipRow.innerHTML = "";
 
-    // Reset UI
     joinCallBtn.textContent = "📹 Join Call";
     joinCallBtn.classList.add("active");
     joinCallBtn.classList.remove("in-call-state");
@@ -956,7 +1164,6 @@ function leaveCall() {
     socket.emit("call:leave");
 }
 
-// ── Mic toggle ────────────────────────────────────
 function updateMicUI() {
     toggleMicBtn.textContent = micEnabled ? "🎤 Mute" : "🔇 Unmute";
     toggleMicBtn.classList.toggle("muted", !micEnabled);
@@ -973,7 +1180,6 @@ toggleMicBtn.addEventListener("click", () => {
     updateMicUI();
 });
 
-// ── Camera toggle ─────────────────────────────────
 function updateCameraUI() {
     toggleCameraBtn.textContent = cameraEnabled ? "📷 Camera Off" : "📷 Camera On";
     toggleCameraBtn.classList.toggle("danger", !cameraEnabled);
@@ -990,12 +1196,10 @@ toggleCameraBtn.addEventListener("click", () => {
     updateCameraUI();
 });
 
-// ── Add video tile (expanded grid + PIP row) ─────
 function addVideoTile(socketId, name, stream, isLocal) {
     removeVideoTile(socketId);
     const displayName = isLocal ? (name + " (You)") : name;
 
-    // ── Expanded grid tile ──
     const tile = document.createElement("div");
     tile.className = "call-video-tile";
     tile.id = "tile-" + socketId;
@@ -1025,7 +1229,6 @@ function addVideoTile(socketId, name, stream, isLocal) {
     tile.appendChild(mutedIcon);
     callVideos.appendChild(tile);
 
-    // ── PIP small tile ──
     const pip = document.createElement("div");
     pip.className = "call-pip-tile";
     pip.id = "pip-" + socketId;
@@ -1051,39 +1254,32 @@ function removeVideoTile(socketId) {
     if (pip) pip.remove();
 }
 
-// ── Create peer connection ────────────────────────
 function createPeer(remoteSocketId, initiator) {
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peers[remoteSocketId] = pc;
 
-    // Add local tracks
     if (localStream) {
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     }
 
-    // When we get remote stream
     pc.ontrack = (e) => {
         const remoteStream = e.streams[0];
-        // Update expanded tile
         const existingTile = document.getElementById("tile-" + remoteSocketId);
         if (existingTile) {
             existingTile.querySelector("video").srcObject = remoteStream;
         }
-        // Update PIP tile
         const existingPip = document.getElementById("pip-" + remoteSocketId);
         if (existingPip) {
             existingPip.querySelector("video").srcObject = remoteStream;
         }
     };
 
-    // ICE candidates
     pc.onicecandidate = (e) => {
         if (e.candidate) {
             socket.emit("call:ice-candidate", { to: remoteSocketId, candidate: e.candidate });
         }
     };
 
-    // Connection state
     pc.onconnectionstatechange = () => {
         if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
             removeVideoTile(remoteSocketId);
@@ -1091,7 +1287,6 @@ function createPeer(remoteSocketId, initiator) {
         }
     };
 
-    // If initiator, create offer
     if (initiator) {
         pc.createOffer()
             .then(offer => pc.setLocalDescription(offer))
@@ -1104,24 +1299,19 @@ function createPeer(remoteSocketId, initiator) {
     return pc;
 }
 
-// ── Socket: existing users when I join ───────────
 socket.on("call:existing-users", (users) => {
     users.forEach(({ socketId, username: name }) => {
-        // Add placeholder tile
         addVideoTile(socketId, name, new MediaStream(), false);
-        // Create peer and send offer
         createPeer(socketId, true);
     });
 });
 
-// ── Socket: new user joined after me ─────────────
 socket.on("call:user-joined", ({ socketId, username: name }) => {
     if (!inCall) return;
     addVideoTile(socketId, name, new MediaStream(), false);
-    createPeer(socketId, false); // they will send offer to me
+    createPeer(socketId, false);
 });
 
-// ── Socket: receive offer ─────────────────────────
 socket.on("call:offer", async ({ from, offer }) => {
     if (!inCall) return;
     let pc = peers[from];
@@ -1132,13 +1322,11 @@ socket.on("call:offer", async ({ from, offer }) => {
     socket.emit("call:answer", { to: from, answer: pc.localDescription });
 });
 
-// ── Socket: receive answer ────────────────────────
 socket.on("call:answer", async ({ from, answer }) => {
     const pc = peers[from];
     if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
 });
 
-// ── Socket: receive ICE candidate ─────────────────
 socket.on("call:ice-candidate", async ({ from, candidate }) => {
     const pc = peers[from];
     if (pc) {
@@ -1147,7 +1335,6 @@ socket.on("call:ice-candidate", async ({ from, candidate }) => {
     }
 });
 
-// ── Socket: user left call ────────────────────────
 socket.on("call:user-left", (socketId) => {
     removeVideoTile(socketId);
     if (peers[socketId]) {
@@ -1156,17 +1343,15 @@ socket.on("call:user-left", (socketId) => {
     }
 });
 
-// ── Participant count ─────────────────────────────
 socket.on("call:participants", (count) => {
     callCount.textContent = count + " in call";
 });
 
-// ── Incoming call signaling ───────────────────────
 socket.on("call:incoming", ({ from, username: name }) => {
     if (incomingCallFrom) return;
     if (inCall) {
-        if (Object.keys(peers).length > 0) return; // In a call with others, ignore
-        leaveCall(); // Alone in a stale call, leave so we can accept
+        if (Object.keys(peers).length > 0) return;
+        leaveCall();
     }
     incomingCallFrom = from;
     incomingCallAvatar.textContent = name.charAt(0).toUpperCase();
@@ -1196,6 +1381,3 @@ socket.on("call:rejected", ({ socketId, username: name }) => {
     joinCallBtn.textContent = "❌ " + name + " declined";
     setTimeout(() => { if (isCalling) cancelCall(); }, 2000);
 });
-
-
-
