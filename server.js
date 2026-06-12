@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const multer     = require("multer");
 const path       = require("path");
 const https      = require("https");
+const ytdl      = require("@distube/ytdl-core");
 
 
 const app    = express();
@@ -48,6 +49,19 @@ app.get("/api/gif-search", (req, res) => {
             } catch(e) { res.json({ results: [], error: null }); }
         });
     }).on("error", () => res.json({ results: [], error: null }));
+});
+
+app.get("/api/video-stream", async (req, res) => {
+    const videoId = req.query.videoId;
+    if (!videoId) return res.status(400).json({ error: "missing videoId" });
+    try {
+        const info = await ytdl.getInfo(videoId);
+        const format = ytdl.chooseFormat(info.formats, { quality: "lowest" });
+        if (!format || !format.url) return res.status(500).json({ error: "no format" });
+        res.json({ url: format.url });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.post("/upload", upload.single("image"), (req, res) => {

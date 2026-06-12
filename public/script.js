@@ -693,37 +693,61 @@ document.addEventListener("paste", (e) => {
 
 
 
-// ── Background Playback ──────────────────────────
-let bgAudioCtx = null;
-let bgOsc = null;
+// ── Picture-in-Picture Background Playback ──────
+let pipVideo = null;
+let pipActive = false;
+let pipLeaveTime = 0;
 
-function initBackgroundAudio() {
-    if (bgAudioCtx) return;
+function isPipSupported() {
+    return 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
+}
+
+async function enterPip(videoId, currentTime) {
+    if (!isPipSupported() || pipActive) return;
     try {
-        bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const gain = bgAudioCtx.createGain();
-        gain.gain.value = 0;
-        bgOsc = bgAudioCtx.createOscillator();
-        bgOsc.frequency.value = 0;
-        bgOsc.connect(gain);
-        gain.connect(bgAudioCtx.destination);
-        bgOsc.start();
-        if (bgAudioCtx.state === 'running') {
-            bgAudioCtx.suspend();
+        const resp = await fetch(`/api/video-stream?videoId=${videoId}`);
+        const data = await resp.json();
+        if (!data.url) { console.warn("PiP: no stream URL"); return; }
+
+        pipVideo = document.createElement("video");
+        pipVideo.src = data.url;
+        pipVideo.currentTime = currentTime;
+        pipVideo.muted = false;
+        pipVideo.playsInline = true;
+        pipVideo.style.display = "none";
+        pipVideo.setAttribute("playsinline", "");
+        pipVideo.setAttribute("webkit-playsinline", "");
+        document.body.appendChild(pipVideo);
+
+        await pipVideo.play();
+        pipLeaveTime = currentTime;
+
+        setTimeout(async () => {
+            if (pipVideo && !pipVideo.paused && isPipSupported()) {
+                try {
+                    await pipVideo.requestPictureInPicture();
+                    pipActive = true;
+                } catch(e) { console.warn("PiP request failed:", e); }
+            }
+        }, 300);
+    } catch(e) { console.warn("PiP enter error:", e); if (pipVideo) { pipVideo.remove(); pipVideo = null; } }
+}
+
+async function exitPip() {
+    let time = null;
+    try {
+        if (document.pictureInPictureElement && pipVideo) {
+            await document.exitPictureInPicture();
         }
-    } catch(e) { bgAudioCtx = null; }
-}
-
-function resumeBackgroundAudio() {
-    if (bgAudioCtx && bgAudioCtx.state === 'suspended') {
-        try { bgAudioCtx.resume(); } catch(e) {}
+    } catch(e) {}
+    if (pipVideo) {
+        time = pipVideo.currentTime;
+        pipVideo.pause();
+        pipVideo.remove();
+        pipVideo = null;
     }
-}
-
-function suspendBackgroundAudio() {
-    if (bgAudioCtx && bgAudioCtx.state === 'running') {
-        try { bgAudioCtx.suspend(); } catch(e) {}
-    }
+    pipActive = false;
+    return time;
 }
 
 function updateMediaSession(title) {
@@ -734,35 +758,37 @@ function updateMediaSession(title) {
             artist: "Watch Together",
         });
         navigator.mediaSession.setActionHandler("play", () => {
-            if (player && playerReady) { player.playVideo(); }
+            if (pipActive && pipVideo) { pipVideo.play(); }
+            else if (player && playerReady) { player.playVideo(); }
         });
         navigator.mediaSession.setActionHandler("pause", () => {
-            if (player && playerReady) { player.pauseVideo(); }
+            if (pipActive && pipVideo) { pipVideo.pause(); }
+            else if (player && playerReady) { player.pauseVideo(); }
         });
     } catch(e) {}
 }
 
-let bgWakeLock = null;
-
-async function requestBgWakeLock() {
-    try { bgWakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
-}
-
-function releaseBgWakeLock() {
-    if (bgWakeLock) { try { bgWakeLock.release(); } catch(e) {} bgWakeLock = null; }
-}
-
-document.addEventListener("visibilitychange", () => {
+document.addEventListener("visibilitychange", async () => {
     if (document.hidden) {
         if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
-            resumeBackgroundAudio();
-            requestBgWakeLock();
+            const ct = player.getCurrentTime();
+            enterPip(currentVideoId, ct);
         }
     } else {
-        suspendBackgroundAudio();
-        releaseBgWakeLock();
-        if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
-            socket.emit("video:sync", player.getCurrentTime());
+        const time = await exitPip();
+        if (time && player && playerReady) {
+            stopSyncInterval();
+            player.seekTo(time, true);
+            if (player.getPlayerState() !== YT.PlayerState.PLAYING) {
+                setPendingRemotePlay();
+                player.playVideo();
+            }
+            setTimeout(() => {
+                if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
+                    startSyncInterval();
+                    socket.emit("video:sync", time);
+                }
+            }, 500);
         }
     }
 });
@@ -879,7 +905,6 @@ function playVideoById(videoId, seekTime, paused) {
     videoEmpty.classList.add("hidden");
     hideBlockedMessage();
     updateMediaSession("Watch Together");
-    initBackgroundAudio();
 
     if (playerReady && player) {
         setPendingRemotePlay();
