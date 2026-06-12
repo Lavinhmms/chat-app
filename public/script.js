@@ -604,27 +604,59 @@ vimageInput.addEventListener("change", () => {
 });
 vattachPreviewRemove.addEventListener("click", () => clearPending("video"));
 
-// ── Paste image support ──────────────────────────
+// ── Paste & Drop image support ──────────────────
+function handleImageFile(file, target) {
+    const isV = target === vinput || target.closest("#vform");
+    if (isV) {
+        vpendingImage = file;
+        showPreview(file, vattachPreview, vattachPreviewImg, vimageBtn);
+    } else {
+        pendingImage = file;
+        showPreview(file, attachPreview, attachPreviewImg, imageBtn);
+    }
+}
+
 document.addEventListener("paste", (e) => {
     const target = e.target;
-    const isVinput = target === vinput;
+    if (target !== input && target !== vinput) return;
     const items = e.clipboardData.items;
     for (const item of items) {
         if (item.type.startsWith("image/")) {
+            e.preventDefault();
             const file = item.getAsFile();
-            if (file) {
-                if (isVinput) {
-                    vpendingImage = file;
-                    showPreview(file, vattachPreview, vattachPreviewImg, vimageBtn);
-                } else {
-                    pendingImage = file;
-                    showPreview(file, attachPreview, attachPreviewImg, imageBtn);
-                }
-            }
+            if (file) handleImageFile(file, target);
             break;
         }
     }
 });
+
+// MutationObserver to catch GIFs inserted by keyboard into contenteditable
+const gifObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+            if (node.nodeName === "IMG") {
+                const target = node.parentElement;
+                const isV = target === vinput || target.closest("#vform");
+                const imgSrc = node.src || "";
+                if (imgSrc) {
+                    fetch(imgSrc).then(r => r.blob()).then(blob => {
+                        const file = new File([blob], "keyboard-gif.gif", { type: blob.type });
+                        if (isV) {
+                            vpendingImage = file;
+                            showPreview(file, vattachPreview, vattachPreviewImg, vimageBtn);
+                        } else {
+                            pendingImage = file;
+                            showPreview(file, attachPreview, attachPreviewImg, imageBtn);
+                        }
+                    }).catch(() => {});
+                }
+                node.remove();
+            }
+        }
+    }
+});
+gifObserver.observe(input, { childList: true, subtree: true });
+gifObserver.observe(vinput, { childList: true, subtree: true });
 
 // ── YouTube Player ────────────────────────────────
 let player           = null;
