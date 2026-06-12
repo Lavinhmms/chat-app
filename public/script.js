@@ -1325,9 +1325,24 @@ callBtn.addEventListener("click", () => {
 });
 
 function startCalling() {
+    if (inCall) return;
     isCalling = true;
     joinCallBtn.textContent = "🔔 Ringing...";
     joinCallBtn.classList.add("active");
+    if (!localStream) {
+        navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640, max: 640 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 15, max: 20 } }, audio: true })
+            .then(stream => {
+                localStream = stream;
+                addVideoTile(socket.id, username.value, localStream, true);
+                Object.values(peers).forEach(pc => {
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                });
+            })
+            .catch(() => {
+                cancelCall();
+                alert("Camera/mic access denied");
+            });
+    }
     socket.emit("call:ring", { username: username.value });
     callRingTimeout = setTimeout(() => {
         if (isCalling) cancelCall();
@@ -1337,6 +1352,12 @@ function startCalling() {
 function cancelCall() {
     isCalling = false;
     if (callRingTimeout) { clearTimeout(callRingTimeout); callRingTimeout = null; }
+    if (localStream && !inCall) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+        callVideos.innerHTML = "";
+        callPipRow.innerHTML = "";
+    }
     socket.emit("call:cancel");
     joinCallBtn.textContent = "📹 Call";
     joinCallBtn.classList.remove("active");
@@ -1765,7 +1786,14 @@ socket.on("call:accepted", async ({ socketId, username: name }) => {
     if (callRingTimeout) { clearTimeout(callRingTimeout); callRingTimeout = null; }
     joinCallBtn.textContent = "✅ " + name + " joined";
     joinCallBtn.classList.remove("active");
-    if (!inCall) setTimeout(() => joinCall(), 600);
+    if (!inCall) {
+        inCall = true;
+        joinCallBtn.textContent = "✅ In Call";
+        joinCallBtn.classList.add("in-call-state");
+        joinCallBtn.disabled = true;
+        callBtn.classList.add("in-call");
+        socket.emit("call:join", username.value);
+    }
 });
 
 socket.on("call:rejected", ({ socketId, username: name }) => {
