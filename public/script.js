@@ -6,14 +6,7 @@ const chat          = document.getElementById("chat");
 const usersList     = document.getElementById("users");
 let   isAdmin       = false;
 
-function getInputText(el) {
-    const txt = el.textContent || "";
-    return txt.replace(/\u200B/g, "").trim() === "" ? "" : txt;
-}
-function setInputText(el, text) {
-    el.textContent = text;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-}
+
 
 /* ===================================
    LOBBY — Create / Join Room
@@ -163,10 +156,10 @@ socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name,
     }
 
     // Unlock chat
-    input.contentEditable = true;
+    document.getElementById("input").disabled = false;
     document.getElementById("emojiBtn").disabled = false;
     document.querySelector("#form button[type='submit']").disabled = false;
-    input.focus();
+    document.getElementById("input").focus();
 
     // Reset video state for fresh join
     currentVideoId = null;
@@ -241,7 +234,7 @@ socket.on("connect", () => {
 const passwordInput = document.getElementById("password");
 const authError     = document.getElementById("authError");
 
-input.contentEditable = false;
+input.disabled = true;
 document.getElementById("emojiBtn").disabled = true;
 document.querySelector("#form button[type='submit']").disabled = true;
 
@@ -401,7 +394,7 @@ function stopRingtone() {
 // ── Chat ──────────────────────────────────────────
 form.addEventListener("submit", (e) => {
     e.preventDefault();
-    const msgText = getInputText(input).trim();
+    const msgText = input.value.trim();
     if ((!msgText && !pendingImage) || !username.value.trim()) return;
 
     if (pendingImage) {
@@ -414,7 +407,7 @@ form.addEventListener("submit", (e) => {
     } else {
         socket.emit("chat message", { user: username.value, msg: msgText });
     }
-    setInputText(input, "");
+    input.value = "";
     socket.emit("stop typing");
     emojiPicker.classList.add("hidden");
 });
@@ -437,25 +430,11 @@ socket.on("chat message", (data) => {
 
 // ── Typing ────────────────────────────────────────
 let typingTimeout;
-
-function cleanEmptyDiv(el) {
-    if (el.innerHTML === "<br>" || !el.textContent.trim()) {
-        el.innerHTML = "";
-    }
-}
-
 input.addEventListener("input", () => {
-    cleanEmptyDiv(input);
     if (!username.value) return;
     socket.emit("typing", username.value);
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
-});
-input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        form.dispatchEvent(new Event("submit"));
-    }
 });
 socket.on("typing",      (u) => { typingIndicator.textContent = u + " is typing..."; document.getElementById("vchatTyping").textContent = u + " is typing..."; });
 socket.on("stop typing", ()  => { typingIndicator.textContent = ""; document.getElementById("vchatTyping").textContent = ""; });
@@ -493,23 +472,14 @@ const vgrid = document.querySelector("#vemojiPicker .emoji-grid");
 emojis.forEach(emoji => {
     const span = document.createElement("span");
     span.textContent = emoji;
-    span.addEventListener("click", () => {
-        setInputText(input, getInputText(input) + emoji);
-        input.focus();
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    span.addEventListener("click", () => { input.value += emoji; input.focus(); });
     grid.appendChild(span);
     const vspan = document.createElement("span");
     vspan.textContent = emoji;
     vspan.addEventListener("click", () => {
         const activeInput = document.activeElement;
-        if (activeInput === vinput) {
-            setInputText(vinput, getInputText(vinput) + emoji);
-            vinput.focus();
-        } else {
-            setInputText(input, getInputText(input) + emoji);
-            input.focus();
-        }
+        if (activeInput === vinput) { vinput.value += emoji; vinput.focus(); }
+        else { input.value += emoji; input.focus(); }
     });
     vgrid.appendChild(vspan);
 });
@@ -644,33 +614,7 @@ document.addEventListener("paste", (e) => {
     }
 });
 
-// MutationObserver to catch GIFs inserted by keyboard into contenteditable
-const gifObserver = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-            if (node.nodeName === "IMG") {
-                const target = node.parentElement;
-                const isV = target === vinput || target.closest("#vform");
-                const imgSrc = node.src || "";
-                if (imgSrc) {
-                    fetch(imgSrc).then(r => r.blob()).then(blob => {
-                        const file = new File([blob], "keyboard-gif.gif", { type: blob.type });
-                        if (isV) {
-                            vpendingImage = file;
-                            showPreview(file, vattachPreview, vattachPreviewImg, vimageBtn);
-                        } else {
-                            pendingImage = file;
-                            showPreview(file, attachPreview, attachPreviewImg, imageBtn);
-                        }
-                    }).catch(() => {});
-                }
-                node.remove();
-            }
-        }
-    }
-});
-gifObserver.observe(input, { childList: true, subtree: true });
-gifObserver.observe(vinput, { childList: true, subtree: true });
+
 
 // ── YouTube Player ────────────────────────────────
 let player           = null;
@@ -1040,7 +984,7 @@ const vemojiBtn = document.getElementById("vemojiBtn");
 
 vform.addEventListener("submit", (e) => {
     e.preventDefault();
-    const msgText = getInputText(vinput).trim();
+    const msgText = vinput.value.trim();
     if ((!msgText && !vpendingImage) || !username.value.trim()) return;
 
     if (vpendingImage) {
@@ -1053,22 +997,15 @@ vform.addEventListener("submit", (e) => {
     } else {
         socket.emit("chat message", { user: username.value, msg: msgText });
     }
-    setInputText(vinput, "");
+    vinput.value = "";
     socket.emit("stop typing");
 });
 
 vinput.addEventListener("input", () => {
-    cleanEmptyDiv(vinput);
     if (!username.value) return;
     socket.emit("typing", username.value);
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
-});
-vinput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        vform.dispatchEvent(new Event("submit"));
-    }
 });
 
 const vemojiPicker = document.getElementById("vemojiPicker");

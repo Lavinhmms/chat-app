@@ -362,21 +362,14 @@ form {
     border-top: 1px solid rgba(255,255,255,0.1);
     position: relative; z-index: 2;
 }
-.chat-input {
-    flex: 1; min-width: 0; outline: none;
-    word-break: break-word; white-space: pre-wrap;
-    max-height: 120px; overflow-y: auto;
-    padding: 14px;
-    border-radius: 14px; font-size: 16px;
-    background: rgba(255,255,255,0.1); color: white;
+#input, #vinput {
+    flex: 1; min-width: 0; height: 50px; padding: 0 14px;
+    border: none; outline: none; border-radius: 14px;
+    font-size: 16px; background: rgba(255,255,255,0.1); color: white;
 }
-.chat-input:empty::before {
-    content: attr(data-placeholder);
-    color: rgba(255,255,255,0.35);
-    pointer-events: none;
-}
-body.light .chat-input { background: rgba(0,0,0,0.08); color: #111; }
-body.light .chat-input:empty::before { color: rgba(0,0,0,0.35); }
+body.light #input, body.light #vinput { background: rgba(0,0,0,0.08); color: #111; }
+#input::placeholder, #vinput::placeholder { color: rgba(255,255,255,0.35); }
+body.light #input::placeholder, body.light #vinput::placeholder { color: rgba(0,0,0,0.35); }
 button {
     width: 50px; height: 50px; border: none; border-radius: 12px;
     background: #2563eb; color: white; cursor: pointer; flex-shrink: 0;
@@ -686,21 +679,14 @@ body.light .video-url-bar input::placeholder { color: rgba(0,0,0,0.35); }
     flex-shrink: 0; border-top: 1px solid rgba(255,255,255,0.06);
     background: rgba(0,0,0,0.3);
 }
-#vinput {
-    padding: 8px 10px; font-size: 13px; min-height: 34px;
-    background: rgba(255,255,255,0.1); color: white;
-    border-radius: 10px;
-}
-body.light #vinput { background: rgba(0,0,0,0.08); color: #111; }
-#vform button {
+#vinput { height: 34px; padding: 0 10px; font-size: 13px; border-radius: 10px; }
+#vform #vemojiBtn, #vform #vgifBtn, #vform #vimageBtn {
     width: 34px; height: 34px; border-radius: 8px;
     font-size: 14px;
 }
-#vemojiBtn {
-    width: 34px; height: 34px; font-size: 16px;
-    background: rgba(255,255,255,0.1); border-radius: 8px;
-}
-body.light #vemojiBtn { background: rgba(0,0,0,0.08); }
+#vform #vgifBtn { font-size: 11px; }
+#vform #vimageBtn { font-size: 16px; }
+body.light #vform #vemojiBtn, body.light #vform #vgifBtn, body.light #vform #vimageBtn { background: rgba(0,0,0,0.08); }
 
 /* Emoji picker inside video panel chat */
 .vemoji-picker {
@@ -752,7 +738,7 @@ body.light .hamburger { background: rgba(0,0,0,0.1); color: #111; }
     #chat { padding: 8px; gap: 8px; }
     .message { max-width: 85%; font-size: 13px; padding: 9px 11px; }
     form { gap: 8px; padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom, 12px)); }
-    .chat-input { padding: 10px 12px; font-size: 14px; min-height: 42px; }
+    #input { height: 42px; padding: 0 12px; background: #fff; color: #000; border-radius: 10px; font-size: 14px; }
     form button { width: 42px; height: 42px; border-radius: 10px; }
     .emoji-picker { bottom: 62px; left: 8px; right: 8px; width: auto; }
     #emojiBtn { width: 42px; height: 42px; font-size: 18px; border-radius: 10px; }
