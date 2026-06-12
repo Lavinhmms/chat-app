@@ -6,8 +6,14 @@ const chat          = document.getElementById("chat");
 const usersList     = document.getElementById("users");
 let   isAdmin       = false;
 
-function getInputText(el) { return el.textContent || ""; }
-function setInputText(el, text) { el.textContent = text; }
+function getInputText(el) {
+    const txt = el.textContent || "";
+    return txt.replace(/\u200B/g, "").trim() === "" ? "" : txt;
+}
+function setInputText(el, text) {
+    el.textContent = text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 /* ===================================
    LOBBY — Create / Join Room
@@ -431,7 +437,15 @@ socket.on("chat message", (data) => {
 
 // ── Typing ────────────────────────────────────────
 let typingTimeout;
+
+function cleanEmptyDiv(el) {
+    if (el.innerHTML === "<br>" || !el.textContent.trim()) {
+        el.innerHTML = "";
+    }
+}
+
 input.addEventListener("input", () => {
+    cleanEmptyDiv(input);
     if (!username.value) return;
     socket.emit("typing", username.value);
     clearTimeout(typingTimeout);
@@ -1044,6 +1058,7 @@ vform.addEventListener("submit", (e) => {
 });
 
 vinput.addEventListener("input", () => {
+    cleanEmptyDiv(vinput);
     if (!username.value) return;
     socket.emit("typing", username.value);
     clearTimeout(typingTimeout);
