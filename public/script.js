@@ -539,17 +539,20 @@ function searchGiphy(query, resultsEl) {
                 resultsEl.classList.add("gif-results-empty");
                 return;
             }
+            const frag = document.createDocumentFragment();
             data.results.forEach(g => {
                 const img = document.createElement("img");
                 img.src = g.url;
                 img.loading = "lazy";
+                img.decoding = "async";
                 img.addEventListener("click", () => {
                     socket.emit("chat message", { user: username.value, msg: "", gif: g.chat });
                     gifPicker.classList.add("hidden");
                     vgifPicker.classList.add("hidden");
                 });
-                resultsEl.appendChild(img);
+                frag.appendChild(img);
             });
+            resultsEl.appendChild(frag);
         })
         .catch(() => {
             resultsEl.innerHTML = '<div class="gif-loading">Search failed</div>';
@@ -1012,12 +1015,10 @@ function renderQueue() {
             "<span class='queue-item-title'>" + (item.title || item.videoId) + "</span>" +
             "<button class='queue-item-remove' data-index='" + i + "'>✕</button>";
         div.addEventListener("click", () => {
-            queueList.splice(i, 1);
             socket.emit("video:play-from-queue", i);
         });
         div.querySelector(".queue-item-remove").addEventListener("click", (e) => {
             e.stopPropagation();
-            queueList.splice(i, 1);
             socket.emit("video:remove-from-queue", i);
         });
         queueItems.appendChild(div);
@@ -1182,9 +1183,9 @@ socket.on("video:loop-state", (enabled) => {
 
 socket.on("video:loop-restart", (videoId) => {
     if (!player || !playerReady) return;
+    stopSyncInterval();
     setPendingRemotePlay();
-    player.seekTo(0, true);
-    player.playVideo();
+    player.loadVideoById({ videoId, startSeconds: 0 });
     videoStatus.textContent = "🔁 Looping";
 });
 

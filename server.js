@@ -29,7 +29,7 @@ app.get("/api/gif-search", (req, res) => {
         return res.json({ results: [], error: "need_key" });
     }
 
-    const url = "https://api.giphy.com/v1/gifs/search?api_key=" + GIPHY_API_KEY + "&q=" + encodeURIComponent(q) + "&limit=20&rating=g";
+    const url = "https://api.giphy.com/v1/gifs/search?api_key=" + GIPHY_API_KEY + "&q=" + encodeURIComponent(q) + "&limit=10&rating=g";
     https.get(url, (gRes) => {
         let data = "";
         gRes.on("data", chunk => data += chunk);
