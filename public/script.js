@@ -693,6 +693,62 @@ document.addEventListener("paste", (e) => {
 
 
 
+// ── Background Playback ──────────────────────────
+let bgAudioCtx = null;
+let bgOsc = null;
+
+function enableBackgroundAudio() {
+    try {
+        if (!bgAudioCtx || bgAudioCtx.state === 'closed') {
+            bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            bgOsc = bgAudioCtx.createOscillator();
+            const gain = bgAudioCtx.createGain();
+            gain.gain.value = 0;
+            bgOsc.connect(gain);
+            gain.connect(bgAudioCtx.destination);
+            bgOsc.start();
+        } else if (bgAudioCtx.state === 'suspended') {
+            bgAudioCtx.resume();
+        }
+    } catch(e) {}
+}
+
+function disableBackgroundAudio() {
+    try {
+        if (bgOsc) { try { bgOsc.stop(); } catch(e) {} try { bgOsc.disconnect(); } catch(e) {} bgOsc = null; }
+        if (bgAudioCtx) { try { bgAudioCtx.close(); } catch(e) {} bgAudioCtx = null; }
+    } catch(e) {}
+}
+
+function updateMediaSession(title) {
+    if (!("mediaSession" in navigator)) return;
+    try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: title || "Huba Huba",
+            artist: "Watch Together",
+        });
+        navigator.mediaSession.setActionHandler("play", () => {
+            if (player && playerReady) { player.playVideo(); }
+        });
+        navigator.mediaSession.setActionHandler("pause", () => {
+            if (player && playerReady) { player.pauseVideo(); }
+        });
+    } catch(e) {}
+}
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
+            enableBackgroundAudio();
+        }
+    } else {
+        disableBackgroundAudio();
+        if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
+            socket.emit("video:sync", player.getCurrentTime());
+        }
+    }
+});
+
 // ── YouTube Player ────────────────────────────────
 let player           = null;
 let playerReady      = false;
@@ -804,6 +860,7 @@ function playVideoById(videoId, seekTime, paused) {
     currentVideoId = videoId;
     videoEmpty.classList.add("hidden");
     hideBlockedMessage();
+    updateMediaSession("Watch Together");
 
     if (playerReady && player) {
         setPendingRemotePlay();
