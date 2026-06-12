@@ -163,6 +163,9 @@ socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name,
 
     // Reset video state for fresh join
     currentVideoId = null;
+    loopEnabled = false;
+    loopBtn.classList.remove("active");
+    loopBtn.title = "Loop";
     queueList = [];
     renderQueue();
 });
@@ -800,6 +803,7 @@ let pendingVideoId   = null;
 let pendingSeekTime  = null;
 let pendingPaused    = false;
 let currentVideoId   = null;
+let loopEnabled      = false;
 
 let pendingRemotePlay = false;
 let pendingRemotePause = false;
@@ -1007,6 +1011,10 @@ function renderQueue() {
         div.innerHTML =
             "<span class='queue-item-title'>" + (item.title || item.videoId) + "</span>" +
             "<button class='queue-item-remove' data-index='" + i + "'>✕</button>";
+        div.addEventListener("click", () => {
+            queueList.splice(i, 1);
+            socket.emit("video:play-from-queue", i);
+        });
         div.querySelector(".queue-item-remove").addEventListener("click", (e) => {
             e.stopPropagation();
             queueList.splice(i, 1);
@@ -1106,6 +1114,18 @@ document.addEventListener("click", (e) => {
         searchResults.classList.add("hidden");
 });
 
+// ── Loop toggle ──────────────────────────────────
+const loopBtn = document.getElementById("loopBtn");
+loopBtn.addEventListener("click", () => {
+    socket.emit("video:toggle-loop");
+});
+
+// ── Shuffle / random from queue ──────────────────
+const shuffleBtn = document.getElementById("shuffleBtn");
+shuffleBtn.addEventListener("click", () => {
+    socket.emit("video:play-random-from-queue");
+});
+
 // ── Socket sync ──────────────────────────────────
 socket.on("room:state", (state) => {
     if (!state.videoId) return;
@@ -1152,6 +1172,20 @@ socket.on("video:queue-update", (q) => {
 
 socket.on("video:next-playing", (title) => {
     videoStatus.textContent = "▶️ " + title;
+});
+
+socket.on("video:loop-state", (enabled) => {
+    loopEnabled = enabled;
+    loopBtn.classList.toggle("active", enabled);
+    loopBtn.title = enabled ? "Looping on" : "Loop";
+});
+
+socket.on("video:loop-restart", (videoId) => {
+    if (!player || !playerReady) return;
+    setPendingRemotePlay();
+    player.seekTo(0, true);
+    player.playVideo();
+    videoStatus.textContent = "🔁 Looping";
 });
 
 // ── Video panel chat ──────────────────────────────

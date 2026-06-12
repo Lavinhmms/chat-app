@@ -41,7 +41,7 @@ app.get("/api/gif-search", (req, res) => {
                 }
                 const results = (json.data || []).map(g => ({
                     id: g.id,
-                    url: g.images.fixed_height_small.url,
+                    url: g.images.preview_gif?.url || g.images.fixed_height_small.url,
                     chat: g.images.downsized.url,
                     original: g.images.original.url
                 }));
@@ -131,7 +131,8 @@ io.on("connection", (socket) => {
                 queue: [],
                 callUsers: {},
                 roomPassword: "",
-                admins: new Set()
+                admins: new Set(),
+                loopEnabled: false
             };
         }
         const room = rooms[roomId];
@@ -141,6 +142,7 @@ io.on("connection", (socket) => {
         room.roomState = { videoId: null, playing: false, time: 0, updatedAt: Date.now() };
         room.queue = [];
         room.callUsers = {};
+        room.loopEnabled = false;
 
         socket.roomId = roomId;
         socket.join(roomId);
@@ -189,6 +191,7 @@ io.on("connection", (socket) => {
             const syncTime = Math.max(0, room.roomState.time + elapsed);
             socket.emit("room:state", { videoId: room.roomState.videoId, time: syncTime, playing: room.roomState.playing });
         }
+        socket.emit("video:loop-state", room.loopEnabled);
         socket.emit("video:queue-update", room.queue);
     });
 
@@ -277,6 +280,10 @@ io.on("connection", (socket) => {
     socket.on("video:next-from-queue", () => {
         const room = getRoom(socket);
         if (!room) return;
+        if (room.loopEnabled && room.roomState.videoId) {
+            io.to(socket.roomId).emit("video:loop-restart", room.roomState.videoId);
+            return;
+        }
         if (room.queue.length > 0) {
             const next = room.queue.shift();
             room.roomState = { videoId: next.videoId, playing: true, time: 0, updatedAt: Date.now() };
@@ -284,6 +291,38 @@ io.on("connection", (socket) => {
             io.to(socket.roomId).emit("video:load", next.videoId);
             io.to(socket.roomId).emit("video:next-playing", next.title || "Next video");
         }
+    });
+
+    socket.on("video:play-from-queue", (index) => {
+        const room = getRoom(socket);
+        if (!room) return;
+        if (index >= 0 && index < room.queue.length) {
+            const next = room.queue.splice(index, 1)[0];
+            room.roomState = { videoId: next.videoId, playing: true, time: 0, updatedAt: Date.now() };
+            io.to(socket.roomId).emit("video:queue-update", room.queue);
+            io.to(socket.roomId).emit("video:load", next.videoId);
+            io.to(socket.roomId).emit("video:next-playing", next.title || "Next video");
+        }
+    });
+
+    socket.on("video:play-random-from-queue", () => {
+        const room = getRoom(socket);
+        if (!room) return;
+        if (room.queue.length > 0) {
+            const idx = Math.floor(Math.random() * room.queue.length);
+            const next = room.queue.splice(idx, 1)[0];
+            room.roomState = { videoId: next.videoId, playing: true, time: 0, updatedAt: Date.now() };
+            io.to(socket.roomId).emit("video:queue-update", room.queue);
+            io.to(socket.roomId).emit("video:load", next.videoId);
+            io.to(socket.roomId).emit("video:next-playing", next.title || "Next video");
+        }
+    });
+
+    socket.on("video:toggle-loop", () => {
+        const room = getRoom(socket);
+        if (!room) return;
+        room.loopEnabled = !room.loopEnabled;
+        io.to(socket.roomId).emit("video:loop-state", room.loopEnabled);
     });
 
     // ── WebRTC signaling ──────────────────────────

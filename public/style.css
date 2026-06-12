@@ -418,6 +418,7 @@ button {
     width: calc(50% - 4px); border-radius: 10px;
     cursor: pointer; transition: transform 0.15s;
     aspect-ratio: 16/9; object-fit: cover;
+    background: rgba(255,255,255,0.05);
 }
 .gif-results img:hover { transform: scale(1.03); }
 .gif-loading {
@@ -590,7 +591,21 @@ body.light .video-url-bar input::placeholder { color: rgba(0,0,0,0.35); }
     padding: 8px 14px; font-size: 12px;
     color: rgba(255,255,255,0.4); text-align: center; flex-shrink: 0;
     background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
 }
+.video-controls {
+    display: flex; gap: 4px; align-items: center;
+    margin-left: auto;
+}
+.video-ctrl-btn {
+    width: 28px; height: 28px; border: none; border-radius: 6px;
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5);
+    font-size: 14px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    transition: all 0.15s; flex-shrink: 0;
+}
+.video-ctrl-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+.video-ctrl-btn.active { background: rgba(56,189,248,0.25); color: #38bdf8; }
 
 /* VIDEO QUEUE */
 .video-queue {
@@ -639,7 +654,9 @@ body.light .video-url-bar input::placeholder { color: rgba(0,0,0,0.35); }
     padding: 5px 12px;
     border-top: 1px solid rgba(255,255,255,0.05);
     gap: 8px;
+    cursor: pointer; transition: background 0.15s;
 }
+.queue-item:hover { background: rgba(255,255,255,0.08); }
 .queue-item-title {
     font-size: 12px;
     color: rgba(255,255,255,0.8);
