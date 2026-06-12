@@ -487,103 +487,28 @@ document.addEventListener("click", (e) => {
     if (!document.getElementById("vemojiPicker").contains(e.target) && e.target !== vemojiBtn) document.getElementById("vemojiPicker").classList.add("hidden");
 });
 
-// ── GIF Picker ────────────────────────────────────
+// ── GIF Upload (from device) ──────────────────────
 const gifBtn = document.getElementById("gifBtn");
-const gifPicker = document.getElementById("gifPicker");
-const gifSearch = document.getElementById("gifSearch");
-const gifResults = document.getElementById("gifResults");
-const closeGifPicker = document.getElementById("closeGifPicker");
-
+const gifInput = document.getElementById("gifInput");
 const vgifBtn = document.getElementById("vgifBtn");
-const vgifPicker = document.getElementById("vgifPicker");
-const vgifSearch = document.getElementById("vgifSearch");
-const vgifResults = document.getElementById("vgifResults");
-const vcloseGifPicker = document.getElementById("vcloseGifPicker");
+const vgifInput = document.getElementById("vgifInput");
 
-let gifSearchTimer = null;
-
-function openGifPicker(picker, searchInput, resultsEl) {
-    picker.classList.toggle("hidden");
-    if (!picker.classList.contains("hidden")) {
-        searchInput.focus();
-        if (searchInput.value.trim()) performGifSearch(searchInput.value.trim(), resultsEl);
+gifBtn.addEventListener("click", () => gifInput.click());
+gifInput.addEventListener("change", () => {
+    if (gifInput.files[0]) {
+        pendingImage = gifInput.files[0];
+        showPreview(gifInput.files[0], attachPreview, attachPreviewImg, imageBtn);
+        gifInput.value = "";
     }
-}
-
-function performGifSearch(query, resultsEl) {
-    resultsEl.innerHTML = '<div class="gif-loading">🔍 Searching...</div>';
-    fetch("/api/gif-search?q=" + encodeURIComponent(query))
-        .then(r => r.json())
-        .then(data => {
-            resultsEl.innerHTML = "";
-            if (data.error) {
-                resultsEl.innerHTML = '<div class="gif-loading" style="color:#f87171;font-size:12px">⚠️ ' + data.error + '</div>';
-                return;
-            }
-            if (!data.results || data.results.length === 0) {
-                resultsEl.innerHTML = '<div class="gif-loading">No GIFs found</div>';
-                return;
-            }
-            data.results.forEach(g => {
-                const img = document.createElement("img");
-                img.src = g.url;
-                img.loading = "lazy";
-                img.addEventListener("click", () => {
-                    sendGif(g.original);
-                    gifPicker.classList.add("hidden");
-                    vgifPicker.classList.add("hidden");
-                });
-                resultsEl.appendChild(img);
-            });
-        })
-        .catch(() => {
-            resultsEl.innerHTML = '<div class="gif-loading">Search failed</div>';
-        });
-}
-
-function sendGif(url) {
-    if (!username.value.trim()) return;
-    socket.emit("chat message", { user: username.value, msg: "", gif: url });
-}
-
-gifBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    emojiPicker.classList.add("hidden");
-    openGifPicker(gifPicker, gifSearch, gifResults);
 });
 
-gifSearch.addEventListener("input", () => {
-    clearTimeout(gifSearchTimer);
-    gifSearchTimer = setTimeout(() => {
-        if (gifSearch.value.trim()) performGifSearch(gifSearch.value.trim(), gifResults);
-        else gifResults.innerHTML = "";
-    }, 400);
-});
-gifSearch.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") performGifSearch(gifSearch.value.trim(), gifResults);
-});
-closeGifPicker.addEventListener("click", () => gifPicker.classList.add("hidden"));
-
-vgifBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    vemojiPicker.classList.add("hidden");
-    openGifPicker(vgifPicker, vgifSearch, vgifResults);
-});
-vgifSearch.addEventListener("input", () => {
-    clearTimeout(gifSearchTimer);
-    gifSearchTimer = setTimeout(() => {
-        if (vgifSearch.value.trim()) performGifSearch(vgifSearch.value.trim(), vgifResults);
-        else vgifResults.innerHTML = "";
-    }, 400);
-});
-vgifSearch.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") performGifSearch(vgifSearch.value.trim(), vgifResults);
-});
-vcloseGifPicker.addEventListener("click", () => vgifPicker.classList.add("hidden"));
-
-document.addEventListener("click", (e) => {
-    if (!gifPicker.contains(e.target) && e.target !== gifBtn && e.target !== gifSearch) gifPicker.classList.add("hidden");
-    if (!vgifPicker.contains(e.target) && e.target !== vgifBtn && e.target !== vgifSearch) vgifPicker.classList.add("hidden");
+vgifBtn.addEventListener("click", () => vgifInput.click());
+vgifInput.addEventListener("change", () => {
+    if (vgifInput.files[0]) {
+        vpendingImage = vgifInput.files[0];
+        showPreview(vgifInput.files[0], vattachPreview, vattachPreviewImg, vimageBtn);
+        vgifInput.value = "";
+    }
 });
 
 // ── Image Upload ──────────────────────────────────

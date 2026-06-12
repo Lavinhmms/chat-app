@@ -375,71 +375,15 @@ button {
     position: relative; z-index: 1; flex-shrink: 0;
 }
 
-/* GIF PICKER */
-.gif-picker {
-    position: absolute; bottom: 70px; left: 60px; width: 300px;
-    background: rgba(20,20,30,0.97);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 16px; z-index: 100;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    overflow: hidden;
-}
-.gif-picker.hidden { display: none; }
-.gif-picker-header {
-    display: flex; gap: 6px; padding: 8px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-.gif-picker-header input {
-    flex: 1; height: 34px; padding: 0 10px;
-    border: none; outline: none; border-radius: 8px;
-    font-size: 13px; background: rgba(255,255,255,0.1); color: white;
-}
-.gif-picker-header input::placeholder { color: rgba(255,255,255,0.4); }
-.gif-picker-header button {
-    width: 34px; height: 34px; border-radius: 8px;
-    background: rgba(255,255,255,0.1); color: white; font-size: 14px;
-}
-.gif-results {
-    display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
-    max-height: 200px; overflow-y: auto;
-}
-.gif-results img {
-    width: calc(50% - 3px); border-radius: 8px;
-    cursor: pointer; transition: transform 0.15s;
-    aspect-ratio: 16/9; object-fit: cover;
-}
-.gif-results img:hover { transform: scale(1.03); }
-.gif-results .gif-loading {
-    width: 100%; text-align: center;
-    padding: 20px; color: rgba(255,255,255,0.4); font-size: 13px;
-}
-
-.vemoji-picker { bottom: 50px; left: 8px; width: 200px; }
-.vemoji-picker .emoji-grid { font-size: 18px; gap: 4px; }
-.vemoji-picker .emoji-grid span { padding: 2px; }
-
-/* GIF picker inside video panel */
-#vform ~ .gif-picker {
-    bottom: 50px; left: 8px; width: 260px;
-}
-
-/* IMAGE UPLOAD BUTTONS */
-#imageBtn, #vimageBtn {
+/* IMAGE/GIF UPLOAD BUTTONS */
+#imageBtn, #vimageBtn, #gifBtn, #vgifBtn {
     width: 50px; height: 50px; font-size: 20px;
     background: rgba(255,255,255,0.1); border-radius: 12px;
     flex-shrink: 0; display: flex; align-items: center; justify-content: center;
 }
-body.light #imageBtn, body.light #vimageBtn { background: rgba(0,0,0,0.08); }
-
-/* GIF BUTTONS */
-#gifBtn, #vgifBtn {
-    width: 50px; height: 50px; font-size: 13px; font-weight: bold;
-    background: rgba(255,255,255,0.1); border-radius: 12px;
-    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-    letter-spacing: -0.5px;
-}
-body.light #gifBtn, body.light #vgifBtn { background: rgba(0,0,0,0.08); color: #111; }
+body.light #imageBtn, body.light #vimageBtn, body.light #gifBtn, body.light #vgifBtn { background: rgba(0,0,0,0.08); }
+#gifBtn, #vgifBtn { font-size: 13px; font-weight: bold; letter-spacing: -0.5px; }
+body.light #gifBtn, body.light #vgifBtn { color: #111; }
 
 /* IMAGE/GIF IN CHAT */
 .message img.message-media {
@@ -448,10 +392,8 @@ body.light #gifBtn, body.light #vgifBtn { background: rgba(0,0,0,0.08); color: #
 }
 
 @media (max-width: 768px) {
-    #gifBtn, #vgifBtn { width: 42px; height: 42px; font-size: 11px; border-radius: 10px; }
-    #imageBtn, #vimageBtn { width: 42px; height: 42px; font-size: 16px; border-radius: 10px; }
-    .gif-picker { bottom: 62px; left: 8px; right: 8px; width: auto; }
-    .gif-results img { width: calc(50% - 3px); }
+    #gifBtn, #vgifBtn, #imageBtn, #vimageBtn { width: 42px; height: 42px; font-size: 16px; border-radius: 10px; }
+    #gifBtn, #vgifBtn { font-size: 11px; }
 }
 
 /* EMOJI */

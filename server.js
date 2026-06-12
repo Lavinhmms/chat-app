@@ -3,7 +3,7 @@ const http       = require("http");
 const { Server } = require("socket.io");
 const multer     = require("multer");
 const path       = require("path");
-const https      = require("https");
+
 
 const app    = express();
 const server = http.createServer(app);
@@ -21,34 +21,6 @@ app.use("/uploads", express.static("uploads"));
 app.post("/upload", upload.single("image"), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     res.json({ url: "/uploads/" + req.file.filename });
-});
-
-const GIPHY_API_KEY = "YOUR_GIPHY_API_KEY"; // Get free key at https://developers.giphy.com/
-app.get("/api/gif-search", (req, res) => {
-    const q = req.query.q;
-    if (!q) return res.json({ results: [], error: null });
-    if (GIPHY_API_KEY === "YOUR_GIPHY_API_KEY") {
-        return res.json({ results: [], error: "Giphy API key not set. Get a free key at https://developers.giphy.com/ and add it to server.js" });
-    }
-    const url = "https://api.giphy.com/v1/gifs/search?api_key=" + GIPHY_API_KEY + "&q=" + encodeURIComponent(q) + "&limit=12&rating=g";
-    https.get(url, (gRes) => {
-        let data = "";
-        gRes.on("data", chunk => data += chunk);
-        gRes.on("end", () => {
-            try {
-                const json = JSON.parse(data);
-                if (json.meta && json.meta.status === 401) {
-                    return res.json({ results: [], error: "Invalid Giphy API key. Check your key at https://developers.giphy.com/" });
-                }
-                const results = (json.data || []).map(g => ({
-                    id: g.id,
-                    url: g.images.fixed_height_downsampled.url,
-                    original: g.images.original.url
-                }));
-                res.json({ results, error: null });
-            } catch(e) { res.json({ results: [], error: "Failed to parse Giphy response" }); }
-        });
-    }).on("error", () => res.json({ results: [], error: "Could not reach Giphy API" }));
 });
 
 const rooms = {};
