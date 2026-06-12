@@ -697,27 +697,33 @@ document.addEventListener("paste", (e) => {
 let bgAudioCtx = null;
 let bgOsc = null;
 
-function enableBackgroundAudio() {
+function initBackgroundAudio() {
+    if (bgAudioCtx) return;
     try {
-        if (!bgAudioCtx || bgAudioCtx.state === 'closed') {
-            bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            bgOsc = bgAudioCtx.createOscillator();
-            const gain = bgAudioCtx.createGain();
-            gain.gain.value = 0;
-            bgOsc.connect(gain);
-            gain.connect(bgAudioCtx.destination);
-            bgOsc.start();
-        } else if (bgAudioCtx.state === 'suspended') {
-            bgAudioCtx.resume();
+        bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const gain = bgAudioCtx.createGain();
+        gain.gain.value = 0;
+        bgOsc = bgAudioCtx.createOscillator();
+        bgOsc.frequency.value = 0;
+        bgOsc.connect(gain);
+        gain.connect(bgAudioCtx.destination);
+        bgOsc.start();
+        if (bgAudioCtx.state === 'running') {
+            bgAudioCtx.suspend();
         }
-    } catch(e) {}
+    } catch(e) { bgAudioCtx = null; }
 }
 
-function disableBackgroundAudio() {
-    try {
-        if (bgOsc) { try { bgOsc.stop(); } catch(e) {} try { bgOsc.disconnect(); } catch(e) {} bgOsc = null; }
-        if (bgAudioCtx) { try { bgAudioCtx.close(); } catch(e) {} bgAudioCtx = null; }
-    } catch(e) {}
+function resumeBackgroundAudio() {
+    if (bgAudioCtx && bgAudioCtx.state === 'suspended') {
+        try { bgAudioCtx.resume(); } catch(e) {}
+    }
+}
+
+function suspendBackgroundAudio() {
+    if (bgAudioCtx && bgAudioCtx.state === 'running') {
+        try { bgAudioCtx.suspend(); } catch(e) {}
+    }
 }
 
 function updateMediaSession(title) {
@@ -736,13 +742,25 @@ function updateMediaSession(title) {
     } catch(e) {}
 }
 
+let bgWakeLock = null;
+
+async function requestBgWakeLock() {
+    try { bgWakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+}
+
+function releaseBgWakeLock() {
+    if (bgWakeLock) { try { bgWakeLock.release(); } catch(e) {} bgWakeLock = null; }
+}
+
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
         if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
-            enableBackgroundAudio();
+            resumeBackgroundAudio();
+            requestBgWakeLock();
         }
     } else {
-        disableBackgroundAudio();
+        suspendBackgroundAudio();
+        releaseBgWakeLock();
         if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
             socket.emit("video:sync", player.getCurrentTime());
         }
@@ -861,6 +879,7 @@ function playVideoById(videoId, seekTime, paused) {
     videoEmpty.classList.add("hidden");
     hideBlockedMessage();
     updateMediaSession("Watch Together");
+    initBackgroundAudio();
 
     if (playerReady && player) {
         setPendingRemotePlay();
