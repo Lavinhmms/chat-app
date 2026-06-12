@@ -418,7 +418,7 @@ function appendMessage(data, container) {
     else if (container === chat) playNotification();
     let html = "<strong>" + data.user + "</strong>" + data.msg;
     if (data.image) html += '<img class="message-media" src="' + data.image + '" onclick="window.open(this.src)" loading="lazy" />';
-    if (data.gif) html += '<img class="message-media" src="' + data.gif + '" onclick="window.open(this.src)" loading="lazy" />';
+    if (data.gif) html += '<img class="message-media" src="' + data.gif + '" loading="lazy" />';
     div.innerHTML = html;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
@@ -541,7 +541,7 @@ function searchGiphy(query, resultsEl) {
                 img.src = g.url;
                 img.loading = "lazy";
                 img.addEventListener("click", () => {
-                    socket.emit("chat message", { user: username.value, msg: "", gif: g.original });
+                    socket.emit("chat message", { user: username.value, msg: "", gif: g.chat });
                     gifPicker.classList.add("hidden");
                     vgifPicker.classList.add("hidden");
                 });
