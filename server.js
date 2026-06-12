@@ -21,13 +21,21 @@ app.use(express.static("public"));
 app.use("/uploads", express.static("uploads"));
 
 const GIPHY_API_KEY = process.env.GIPHY_KEY || "7ts8YUGRxPmmILiPdopADIpMekHL2Y4S";
-app.get("/api/gif-search", (req, res) => {
-    const q = req.query.q;
-    if (!q) return res.json({ results: [], error: null });
-
-    if (!GIPHY_API_KEY) {
-        return res.json({ results: [], error: "need_key" });
+const gifCache = new Map();
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of gifCache) {
+        if (now - entry.ts > 60000) gifCache.delete(key);
     }
+}, 30000);
+
+app.get("/api/gif-search", (req, res) => {
+    const q = (req.query.q || "").trim().toLowerCase();
+    if (!q) return res.json({ results: [], error: null });
+    if (!GIPHY_API_KEY) return res.json({ results: [], error: "need_key" });
+
+    const cached = gifCache.get(q);
+    if (cached) return res.json(cached.data);
 
     const url = "https://api.giphy.com/v1/gifs/search?api_key=" + GIPHY_API_KEY + "&q=" + encodeURIComponent(q) + "&limit=10&rating=g";
     https.get(url, (gRes) => {
@@ -42,11 +50,13 @@ app.get("/api/gif-search", (req, res) => {
                 const results = (json.data || []).map(g => ({
                     id: g.id,
                     url: g.images.preview_gif?.url || g.images.fixed_height_small.url,
-                    mp4: g.images.preview?.mp4 || g.images.fixed_width_small?.mp4 || "",
+                    mp4: g.images.fixed_width_small?.mp4 || g.images.preview?.mp4 || "",
                     chat: g.images.downsized.url,
                     original: g.images.original.url
                 }));
-                res.json({ results, error: null });
+                const out = { results, error: null };
+                gifCache.set(q, { data: out, ts: Date.now() });
+                res.json(out);
             } catch(e) { res.json({ results: [], error: null }); }
         });
     }).on("error", () => res.json({ results: [], error: null }));

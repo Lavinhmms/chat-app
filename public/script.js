@@ -514,7 +514,7 @@ function toggleGifPicker(picker, searchInput, resultsEl) {
     if (opening) {
         searchInput.focus();
         searchInput.select();
-        if (searchInput.value.trim()) searchGiphy(searchInput.value.trim(), resultsEl);
+        searchGiphy(searchInput.value.trim() || "trending", resultsEl);
     }
 }
 
@@ -574,10 +574,9 @@ gifBtn.addEventListener("click", (e) => {
 });
 gifSearch.addEventListener("input", () => {
     clearTimeout(gifSearchTimer);
-    gifSearchTimer = setTimeout(() => {
-        if (gifSearch.value.trim()) searchGiphy(gifSearch.value.trim(), gifResults);
-        else { gifResults.innerHTML = ""; gifResults.classList.add("gif-results-empty"); }
-    }, 400);
+    const val = gifSearch.value.trim();
+    if (!val) { gifResults.innerHTML = '<div class="gif-loading">Search GIFs...</div>'; return; }
+    gifSearchTimer = setTimeout(() => searchGiphy(val, gifResults), 200);
 });
 gifSearch.addEventListener("keydown", (e) => {
     if (e.key === "Enter") searchGiphy(gifSearch.value.trim(), gifResults);
@@ -590,10 +589,9 @@ vgifBtn.addEventListener("click", (e) => {
 });
 vgifSearch.addEventListener("input", () => {
     clearTimeout(gifSearchTimer);
-    gifSearchTimer = setTimeout(() => {
-        if (vgifSearch.value.trim()) searchGiphy(vgifSearch.value.trim(), vgifResults);
-        else { vgifResults.innerHTML = ""; vgifResults.classList.add("gif-results-empty"); }
-    }, 400);
+    const val = vgifSearch.value.trim();
+    if (!val) { vgifResults.innerHTML = '<div class="gif-loading">Search GIFs...</div>'; return; }
+    gifSearchTimer = setTimeout(() => searchGiphy(val, vgifResults), 200);
 });
 vgifSearch.addEventListener("keydown", (e) => {
     if (e.key === "Enter") searchGiphy(vgifSearch.value.trim(), vgifResults);
