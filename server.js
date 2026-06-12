@@ -3,6 +3,7 @@ const http       = require("http");
 const { Server } = require("socket.io");
 const multer     = require("multer");
 const path       = require("path");
+const https      = require("https");
 
 
 const app    = express();
@@ -17,6 +18,36 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 app.use(express.static("public"));
 app.use("/uploads", express.static("uploads"));
+
+const GIPHY_API_KEY = process.env.GIPHY_KEY || "7ts8YUGRxPmmILiPdopADIpMekHL2Y4S";
+app.get("/api/gif-search", (req, res) => {
+    const q = req.query.q;
+    if (!q) return res.json({ results: [], error: null });
+
+    if (!GIPHY_API_KEY) {
+        return res.json({ results: [], error: "need_key" });
+    }
+
+    const url = "https://api.giphy.com/v1/gifs/search?api_key=" + GIPHY_API_KEY + "&q=" + encodeURIComponent(q) + "&limit=20&rating=g";
+    https.get(url, (gRes) => {
+        let data = "";
+        gRes.on("data", chunk => data += chunk);
+        gRes.on("end", () => {
+            try {
+                const json = JSON.parse(data);
+                if (json.meta && json.meta.status === 401) {
+                    return res.json({ results: [], error: "bad_key" });
+                }
+                const results = (json.data || []).map(g => ({
+                    id: g.id,
+                    url: g.images.fixed_height_small.url,
+                    original: g.images.original.url
+                }));
+                res.json({ results, error: null });
+            } catch(e) { res.json({ results: [], error: null }); }
+        });
+    }).on("error", () => res.json({ results: [], error: null }));
+});
 
 app.post("/upload", upload.single("image"), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });

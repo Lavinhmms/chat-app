@@ -382,7 +382,54 @@ button {
     position: relative; z-index: 1; flex-shrink: 0;
 }
 
-/* IMAGE/GIF UPLOAD BUTTONS */
+/* GIF PICKER */
+.gif-picker {
+    position: absolute; bottom: 62px; left: 12px; right: 12px;
+    background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; z-index: 200;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    overflow: hidden; display: flex; flex-direction: column;
+    max-height: 360px;
+}
+.gif-picker.hidden { display: none; }
+.gif-picker-header {
+    display: flex; gap: 8px; padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+}
+.gif-search-input {
+    flex: 1; height: 40px; padding: 0 14px;
+    border: none; outline: none; border-radius: 10px;
+    font-size: 14px; background: rgba(255,255,255,0.08); color: white;
+}
+.gif-search-input::placeholder { color: rgba(255,255,255,0.35); }
+.gif-picker-close {
+    width: 40px; height: 40px; border: none; border-radius: 10px;
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6);
+    font-size: 16px; cursor: pointer; flex-shrink: 0;
+}
+.gif-picker-close:hover { background: rgba(255,255,255,0.15); color: white; }
+.gif-results {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 12px;
+    overflow-y: auto; flex: 1;
+}
+.gif-results.gif-results-empty { justify-content: center; align-items: center; padding: 30px; }
+.gif-results img {
+    width: calc(50% - 4px); border-radius: 10px;
+    cursor: pointer; transition: transform 0.15s;
+    aspect-ratio: 16/9; object-fit: cover;
+}
+.gif-results img:hover { transform: scale(1.03); }
+.gif-loading {
+    width: 100%; text-align: center;
+    padding: 30px; color: rgba(255,255,255,0.4); font-size: 13px;
+}
+
+/* Video panel GIF picker - smaller, positioned differently */
+.gif-picker-video { bottom: 52px; left: 8px; right: 8px; max-height: 260px; }
+.gif-picker-video .gif-results img { width: calc(50% - 4px); }
+
+/* IMAGE/UPLOAD BUTTONS */
 #imageBtn, #vimageBtn, #gifBtn, #vgifBtn {
     width: 50px; height: 50px; font-size: 20px;
     background: rgba(255,255,255,0.1); border-radius: 12px;
@@ -401,6 +448,8 @@ body.light #gifBtn, body.light #vgifBtn { color: #111; }
 @media (max-width: 768px) {
     #gifBtn, #vgifBtn, #imageBtn, #vimageBtn { width: 42px; height: 42px; font-size: 16px; border-radius: 10px; }
     #gifBtn, #vgifBtn { font-size: 11px; }
+    .gif-picker { left: 8px; right: 8px; max-height: 300px; }
+    .gif-picker-video { max-height: 220px; }
 }
 
 /* EMOJI */

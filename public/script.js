@@ -489,28 +489,105 @@ document.addEventListener("click", (e) => {
     if (!document.getElementById("vemojiPicker").contains(e.target) && e.target !== vemojiBtn) document.getElementById("vemojiPicker").classList.add("hidden");
 });
 
-// ── GIF Upload (from device) ──────────────────────
+// ── GIF Picker (Giphy API) ──────────────────────
 const gifBtn = document.getElementById("gifBtn");
-const gifInput = document.getElementById("gifInput");
 const vgifBtn = document.getElementById("vgifBtn");
-const vgifInput = document.getElementById("vgifInput");
+const gifPicker = document.getElementById("gifPicker");
+const vgifPicker = document.getElementById("vgifPicker");
+const gifSearch = document.getElementById("gifSearch");
+const vgifSearch = document.getElementById("vgifSearch");
+const gifResults = document.getElementById("gifResults");
+const vgifResults = document.getElementById("vgifResults");
+const closeGifPicker = document.getElementById("closeGifPicker");
+const vcloseGifPicker = document.getElementById("vcloseGifPicker");
 
-gifBtn.addEventListener("click", () => gifInput.click());
-gifInput.addEventListener("change", () => {
-    if (gifInput.files[0]) {
-        pendingImage = gifInput.files[0];
-        showPreview(gifInput.files[0], attachPreview, attachPreviewImg, imageBtn);
-        gifInput.value = "";
+let gifSearchTimer = null;
+
+function toggleGifPicker(picker, searchInput, resultsEl) {
+    const opening = picker.classList.toggle("hidden");
+    emojiPicker.classList.add("hidden");
+    vemojiPicker.classList.add("hidden");
+    if (opening) {
+        searchInput.focus();
+        searchInput.select();
+        if (searchInput.value.trim()) searchGiphy(searchInput.value.trim(), resultsEl);
     }
+}
+
+function searchGiphy(query, resultsEl) {
+    resultsEl.innerHTML = '<div class="gif-loading">Searching...</div>';
+    resultsEl.classList.remove("gif-results-empty");
+    fetch("/api/gif-search?q=" + encodeURIComponent(query))
+        .then(r => r.json())
+        .then(data => {
+            resultsEl.innerHTML = "";
+            if (data.error === "need_key") {
+                resultsEl.innerHTML = '<div class="gif-loading" style="color:#fbbf24">⚠️ Set your Giphy API key<br><span style="font-size:11px;color:rgba(255,255,255,0.4)">Get a free key at developers.giphy.com</span></div>';
+                resultsEl.classList.add("gif-results-empty");
+                return;
+            }
+            if (data.error === "bad_key") {
+                resultsEl.innerHTML = '<div class="gif-loading" style="color:#f87171">⚠️ Invalid API key</div>';
+                resultsEl.classList.add("gif-results-empty");
+                return;
+            }
+            if (!data.results || data.results.length === 0) {
+                resultsEl.innerHTML = '<div class="gif-loading">No results — try another search</div>';
+                resultsEl.classList.add("gif-results-empty");
+                return;
+            }
+            data.results.forEach(g => {
+                const img = document.createElement("img");
+                img.src = g.url;
+                img.loading = "lazy";
+                img.addEventListener("click", () => {
+                    socket.emit("chat message", { user: username.value, msg: "", gif: g.original });
+                    gifPicker.classList.add("hidden");
+                    vgifPicker.classList.add("hidden");
+                });
+                resultsEl.appendChild(img);
+            });
+        })
+        .catch(() => {
+            resultsEl.innerHTML = '<div class="gif-loading">Search failed</div>';
+        });
+}
+
+gifBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleGifPicker(gifPicker, gifSearch, gifResults);
 });
+gifSearch.addEventListener("input", () => {
+    clearTimeout(gifSearchTimer);
+    gifSearchTimer = setTimeout(() => {
+        if (gifSearch.value.trim()) searchGiphy(gifSearch.value.trim(), gifResults);
+        else { gifResults.innerHTML = ""; gifResults.classList.add("gif-results-empty"); }
+    }, 400);
+});
+gifSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") searchGiphy(gifSearch.value.trim(), gifResults);
+});
+closeGifPicker.addEventListener("click", () => gifPicker.classList.add("hidden"));
 
-vgifBtn.addEventListener("click", () => vgifInput.click());
-vgifInput.addEventListener("change", () => {
-    if (vgifInput.files[0]) {
-        vpendingImage = vgifInput.files[0];
-        showPreview(vgifInput.files[0], vattachPreview, vattachPreviewImg, vimageBtn);
-        vgifInput.value = "";
-    }
+vgifBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleGifPicker(vgifPicker, vgifSearch, vgifResults);
+});
+vgifSearch.addEventListener("input", () => {
+    clearTimeout(gifSearchTimer);
+    gifSearchTimer = setTimeout(() => {
+        if (vgifSearch.value.trim()) searchGiphy(vgifSearch.value.trim(), vgifResults);
+        else { vgifResults.innerHTML = ""; vgifResults.classList.add("gif-results-empty"); }
+    }, 400);
+});
+vgifSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") searchGiphy(vgifSearch.value.trim(), vgifResults);
+});
+vcloseGifPicker.addEventListener("click", () => vgifPicker.classList.add("hidden"));
+
+document.addEventListener("click", (e) => {
+    if (!gifPicker.contains(e.target) && e.target !== gifBtn) gifPicker.classList.add("hidden");
+    if (!vgifPicker.contains(e.target) && e.target !== vgifBtn) vgifPicker.classList.add("hidden");
 });
 
 // ── Image Upload ──────────────────────────────────

@@ -98,10 +98,16 @@
                     <div id="emojiPicker" class="emoji-picker hidden">
                         <div class="emoji-grid"></div>
                     </div>
-                    <input type="file" id="gifInput" accept="image/gif" class="hidden" />
                     <div id="attachPreview" class="attach-preview hidden">
                         <img id="attachPreviewImg" />
                         <button type="button" id="attachPreviewRemove">✕</button>
+                    </div>
+                    <div id="gifPicker" class="gif-picker hidden">
+                        <div class="gif-picker-header">
+                            <input id="gifSearch" class="gif-search-input" placeholder="Search GIFs..." autocomplete="off" />
+                            <button type="button" class="gif-picker-close" id="closeGifPicker">✕</button>
+                        </div>
+                        <div class="gif-results" id="gifResults"></div>
                     </div>
                     <form id="form">
                         <button type="button" id="emojiBtn">😊</button>
@@ -111,6 +117,7 @@
                         <button type="submit">➤</button>
                     </form>
                     <input type="file" id="imageInput" accept="image/*" class="hidden" />
+                    <input type="file" id="gifInput" accept="image/gif" class="hidden" />
                 </div>
             </div>
 
@@ -146,7 +153,13 @@
                     <div id="vchatMsgs"></div>
                     <div id="vchatTyping"></div>
                     <div id="vemojiPicker" class="vemoji-picker hidden"><div class="emoji-grid"></div></div>
-                    <input type="file" id="vgifInput" accept="image/gif" class="hidden" />
+                    <div id="vgifPicker" class="gif-picker gif-picker-video hidden">
+                        <div class="gif-picker-header">
+                            <input id="vgifSearch" class="gif-search-input" placeholder="Search GIFs..." autocomplete="off" />
+                            <button type="button" class="gif-picker-close" id="vcloseGifPicker">✕</button>
+                        </div>
+                        <div class="gif-results" id="vgifResults"></div>
+                    </div>
                     <div id="vattachPreview" class="attach-preview hidden">
                         <img id="vattachPreviewImg" />
                         <button type="button" id="vattachPreviewRemove">✕</button>
