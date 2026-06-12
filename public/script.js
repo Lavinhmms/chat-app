@@ -392,8 +392,19 @@ function stopRingtone() {
 // ── Chat ──────────────────────────────────────────
 form.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (!input.value.trim() || !username.value.trim()) return;
-    socket.emit("chat message", { user: username.value, msg: input.value });
+    if ((!input.value.trim() && !pendingImage) || !username.value.trim()) return;
+
+    if (pendingImage) {
+        const msgText = input.value;
+        uploadImage(pendingImage).then(url => {
+            if (url) {
+                socket.emit("chat message", { user: username.value, msg: msgText, image: url });
+            }
+            clearPending("main");
+        });
+    } else {
+        socket.emit("chat message", { user: username.value, msg: input.value });
+    }
     input.value = "";
     socket.emit("stop typing");
     emojiPicker.classList.add("hidden");
@@ -403,7 +414,10 @@ function appendMessage(data, container) {
     div.classList.add("message");
     if (data.user === username.value) div.classList.add("self");
     else if (container === chat) playNotification();
-    div.innerHTML = "<strong>" + data.user + "</strong>" + data.msg;
+    let html = "<strong>" + data.user + "</strong>" + data.msg;
+    if (data.image) html += '<img class="message-media" src="' + data.image + '" onclick="window.open(this.src)" loading="lazy" />';
+    if (data.gif) html += '<img class="message-media" src="' + data.gif + '" onclick="window.open(this.src)" loading="lazy" />';
+    div.innerHTML = html;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
@@ -473,6 +487,202 @@ document.addEventListener("click", (e) => {
     if (!document.getElementById("vemojiPicker").contains(e.target) && e.target !== vemojiBtn) document.getElementById("vemojiPicker").classList.add("hidden");
 });
 
+// ── GIF Picker ────────────────────────────────────
+const gifBtn = document.getElementById("gifBtn");
+const gifPicker = document.getElementById("gifPicker");
+const gifSearch = document.getElementById("gifSearch");
+const gifResults = document.getElementById("gifResults");
+const closeGifPicker = document.getElementById("closeGifPicker");
+
+const vgifBtn = document.getElementById("vgifBtn");
+const vgifPicker = document.getElementById("vgifPicker");
+const vgifSearch = document.getElementById("vgifSearch");
+const vgifResults = document.getElementById("vgifResults");
+const vcloseGifPicker = document.getElementById("vcloseGifPicker");
+
+let gifSearchTimer = null;
+
+function openGifPicker(picker, searchInput, resultsEl) {
+    picker.classList.toggle("hidden");
+    if (!picker.classList.contains("hidden")) {
+        searchInput.focus();
+        if (searchInput.value.trim()) performGifSearch(searchInput.value.trim(), resultsEl);
+    }
+}
+
+function performGifSearch(query, resultsEl) {
+    resultsEl.innerHTML = '<div class="gif-loading">🔍 Searching...</div>';
+    fetch("/api/gif-search?q=" + encodeURIComponent(query))
+        .then(r => r.json())
+        .then(data => {
+            resultsEl.innerHTML = "";
+            if (data.error) {
+                resultsEl.innerHTML = '<div class="gif-loading" style="color:#f87171;font-size:12px">⚠️ ' + data.error + '</div>';
+                return;
+            }
+            if (!data.results || data.results.length === 0) {
+                resultsEl.innerHTML = '<div class="gif-loading">No GIFs found</div>';
+                return;
+            }
+            data.results.forEach(g => {
+                const img = document.createElement("img");
+                img.src = g.url;
+                img.loading = "lazy";
+                img.addEventListener("click", () => {
+                    sendGif(g.original);
+                    gifPicker.classList.add("hidden");
+                    vgifPicker.classList.add("hidden");
+                });
+                resultsEl.appendChild(img);
+            });
+        })
+        .catch(() => {
+            resultsEl.innerHTML = '<div class="gif-loading">Search failed</div>';
+        });
+}
+
+function sendGif(url) {
+    if (!username.value.trim()) return;
+    socket.emit("chat message", { user: username.value, msg: "", gif: url });
+}
+
+gifBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    emojiPicker.classList.add("hidden");
+    openGifPicker(gifPicker, gifSearch, gifResults);
+});
+
+gifSearch.addEventListener("input", () => {
+    clearTimeout(gifSearchTimer);
+    gifSearchTimer = setTimeout(() => {
+        if (gifSearch.value.trim()) performGifSearch(gifSearch.value.trim(), gifResults);
+        else gifResults.innerHTML = "";
+    }, 400);
+});
+gifSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") performGifSearch(gifSearch.value.trim(), gifResults);
+});
+closeGifPicker.addEventListener("click", () => gifPicker.classList.add("hidden"));
+
+vgifBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    vemojiPicker.classList.add("hidden");
+    openGifPicker(vgifPicker, vgifSearch, vgifResults);
+});
+vgifSearch.addEventListener("input", () => {
+    clearTimeout(gifSearchTimer);
+    gifSearchTimer = setTimeout(() => {
+        if (vgifSearch.value.trim()) performGifSearch(vgifSearch.value.trim(), vgifResults);
+        else vgifResults.innerHTML = "";
+    }, 400);
+});
+vgifSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") performGifSearch(vgifSearch.value.trim(), vgifResults);
+});
+vcloseGifPicker.addEventListener("click", () => vgifPicker.classList.add("hidden"));
+
+document.addEventListener("click", (e) => {
+    if (!gifPicker.contains(e.target) && e.target !== gifBtn && e.target !== gifSearch) gifPicker.classList.add("hidden");
+    if (!vgifPicker.contains(e.target) && e.target !== vgifBtn && e.target !== vgifSearch) vgifPicker.classList.add("hidden");
+});
+
+// ── Image Upload ──────────────────────────────────
+const imageBtn = document.getElementById("imageBtn");
+const imageInput = document.getElementById("imageInput");
+const vimageBtn = document.getElementById("vimageBtn");
+const vimageInput = document.getElementById("vimageInput");
+const attachPreview = document.getElementById("attachPreview");
+const attachPreviewImg = document.getElementById("attachPreviewImg");
+const attachPreviewRemove = document.getElementById("attachPreviewRemove");
+const vattachPreview = document.getElementById("vattachPreview");
+const vattachPreviewImg = document.getElementById("vattachPreviewImg");
+const vattachPreviewRemove = document.getElementById("vattachPreviewRemove");
+let pendingImage = null;
+let vpendingImage = null;
+
+function uploadImage(file) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("image", file);
+    return fetch("/upload", { method: "POST", body: formData })
+        .then(r => r.json())
+        .then(data => data.url || null)
+        .catch(() => null);
+}
+
+function showPreview(file, previewEl, imgEl, btnEl) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        imgEl.src = e.target.result;
+        previewEl.classList.remove("hidden");
+        btnEl.textContent = "📎";
+        btnEl.style.background = "rgba(22,163,74,0.3)";
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearPending(which) {
+    if (which === "main") {
+        pendingImage = null;
+        attachPreview.classList.add("hidden");
+        attachPreviewImg.src = "";
+        imageBtn.textContent = "📷";
+        imageBtn.style.background = "";
+    } else {
+        vpendingImage = null;
+        vattachPreview.classList.add("hidden");
+        vattachPreviewImg.src = "";
+        vimageBtn.textContent = "📷";
+        vimageBtn.style.background = "";
+    }
+}
+
+imageBtn.addEventListener("click", () => {
+    if (pendingImage) { clearPending("main"); return; }
+    imageInput.click();
+});
+imageInput.addEventListener("change", () => {
+    if (imageInput.files[0]) {
+        pendingImage = imageInput.files[0];
+        showPreview(imageInput.files[0], attachPreview, attachPreviewImg, imageBtn);
+    }
+});
+attachPreviewRemove.addEventListener("click", () => clearPending("main"));
+
+vimageBtn.addEventListener("click", () => {
+    if (vpendingImage) { clearPending("video"); return; }
+    vimageInput.click();
+});
+vimageInput.addEventListener("change", () => {
+    if (vimageInput.files[0]) {
+        vpendingImage = vimageInput.files[0];
+        showPreview(vimageInput.files[0], vattachPreview, vattachPreviewImg, vimageBtn);
+    }
+});
+vattachPreviewRemove.addEventListener("click", () => clearPending("video"));
+
+// ── Paste image support ──────────────────────────
+document.addEventListener("paste", (e) => {
+    const target = e.target;
+    const isVinput = target === vinput;
+    const items = e.clipboardData.items;
+    for (const item of items) {
+        if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) {
+                if (isVinput) {
+                    vpendingImage = file;
+                    showPreview(file, vattachPreview, vattachPreviewImg, vimageBtn);
+                } else {
+                    pendingImage = file;
+                    showPreview(file, attachPreview, attachPreviewImg, imageBtn);
+                }
+            }
+            break;
+        }
+    }
+});
+
 // ── YouTube Player ────────────────────────────────
 let player           = null;
 let playerReady      = false;
@@ -505,7 +715,7 @@ function startSyncInterval() {
         if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
             socket.emit("video:sync", player.getCurrentTime());
         }
-    }, 10000);
+    }, 5000);
 }
 function stopSyncInterval() {
     if (syncInterval) {
@@ -560,7 +770,6 @@ window.onYouTubeIframeAPIReady = function() {
                     pendingRemotePause = false;
                     return;
                 }
-                if (document.hidden) return;
                 const ct = player.getCurrentTime();
                 clearTimeout(window._stateChangeTimer);
                 window._stateChangeTimer = setTimeout(() => {
@@ -842,8 +1051,19 @@ const vemojiBtn = document.getElementById("vemojiBtn");
 
 vform.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (!vinput.value.trim() || !username.value.trim()) return;
-    socket.emit("chat message", { user: username.value, msg: vinput.value });
+    if ((!vinput.value.trim() && !vpendingImage) || !username.value.trim()) return;
+
+    if (vpendingImage) {
+        const msgText = vinput.value;
+        uploadImage(vpendingImage).then(url => {
+            if (url) {
+                socket.emit("chat message", { user: username.value, msg: msgText, image: url });
+            }
+            clearPending("video");
+        });
+    } else {
+        socket.emit("chat message", { user: username.value, msg: vinput.value });
+    }
     vinput.value = "";
     socket.emit("stop typing");
 });
