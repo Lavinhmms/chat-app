@@ -6,6 +6,9 @@ const chat          = document.getElementById("chat");
 const usersList     = document.getElementById("users");
 let   isAdmin       = false;
 
+function getInputText(el) { return el.textContent || ""; }
+function setInputText(el, text) { el.textContent = text; }
+
 /* ===================================
    LOBBY — Create / Join Room
 =================================== */
@@ -154,10 +157,10 @@ socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name,
     }
 
     // Unlock chat
-    document.getElementById("input").disabled = false;
+    input.contentEditable = true;
     document.getElementById("emojiBtn").disabled = false;
     document.querySelector("#form button[type='submit']").disabled = false;
-    document.getElementById("input").focus();
+    input.focus();
 
     // Reset video state for fresh join
     currentVideoId = null;
@@ -232,7 +235,7 @@ socket.on("connect", () => {
 const passwordInput = document.getElementById("password");
 const authError     = document.getElementById("authError");
 
-document.getElementById("input").disabled = true;
+input.contentEditable = false;
 document.getElementById("emojiBtn").disabled = true;
 document.querySelector("#form button[type='submit']").disabled = true;
 
@@ -392,10 +395,10 @@ function stopRingtone() {
 // ── Chat ──────────────────────────────────────────
 form.addEventListener("submit", (e) => {
     e.preventDefault();
-    if ((!input.value.trim() && !pendingImage) || !username.value.trim()) return;
+    const msgText = getInputText(input).trim();
+    if ((!msgText && !pendingImage) || !username.value.trim()) return;
 
     if (pendingImage) {
-        const msgText = input.value;
         uploadImage(pendingImage).then(url => {
             if (url) {
                 socket.emit("chat message", { user: username.value, msg: msgText, image: url });
@@ -403,9 +406,9 @@ form.addEventListener("submit", (e) => {
             clearPending("main");
         });
     } else {
-        socket.emit("chat message", { user: username.value, msg: input.value });
+        socket.emit("chat message", { user: username.value, msg: msgText });
     }
-    input.value = "";
+    setInputText(input, "");
     socket.emit("stop typing");
     emojiPicker.classList.add("hidden");
 });
@@ -433,6 +436,12 @@ input.addEventListener("input", () => {
     socket.emit("typing", username.value);
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
+});
+input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form.dispatchEvent(new Event("submit"));
+    }
 });
 socket.on("typing",      (u) => { typingIndicator.textContent = u + " is typing..."; document.getElementById("vchatTyping").textContent = u + " is typing..."; });
 socket.on("stop typing", ()  => { typingIndicator.textContent = ""; document.getElementById("vchatTyping").textContent = ""; });
@@ -470,14 +479,23 @@ const vgrid = document.querySelector("#vemojiPicker .emoji-grid");
 emojis.forEach(emoji => {
     const span = document.createElement("span");
     span.textContent = emoji;
-    span.addEventListener("click", () => { input.value += emoji; input.focus(); });
+    span.addEventListener("click", () => {
+        setInputText(input, getInputText(input) + emoji);
+        input.focus();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     grid.appendChild(span);
     const vspan = document.createElement("span");
     vspan.textContent = emoji;
     vspan.addEventListener("click", () => {
         const activeInput = document.activeElement;
-        if (activeInput === vinput) { vinput.value += emoji; vinput.focus(); }
-        else { input.value += emoji; input.focus(); }
+        if (activeInput === vinput) {
+            setInputText(vinput, getInputText(vinput) + emoji);
+            vinput.focus();
+        } else {
+            setInputText(input, getInputText(input) + emoji);
+            input.focus();
+        }
     });
     vgrid.appendChild(vspan);
 });
@@ -976,10 +994,10 @@ const vemojiBtn = document.getElementById("vemojiBtn");
 
 vform.addEventListener("submit", (e) => {
     e.preventDefault();
-    if ((!vinput.value.trim() && !vpendingImage) || !username.value.trim()) return;
+    const msgText = getInputText(vinput).trim();
+    if ((!msgText && !vpendingImage) || !username.value.trim()) return;
 
     if (vpendingImage) {
-        const msgText = vinput.value;
         uploadImage(vpendingImage).then(url => {
             if (url) {
                 socket.emit("chat message", { user: username.value, msg: msgText, image: url });
@@ -987,9 +1005,9 @@ vform.addEventListener("submit", (e) => {
             clearPending("video");
         });
     } else {
-        socket.emit("chat message", { user: username.value, msg: vinput.value });
+        socket.emit("chat message", { user: username.value, msg: msgText });
     }
-    vinput.value = "";
+    setInputText(vinput, "");
     socket.emit("stop typing");
 });
 
@@ -998,6 +1016,12 @@ vinput.addEventListener("input", () => {
     socket.emit("typing", username.value);
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
+});
+vinput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        vform.dispatchEvent(new Event("submit"));
+    }
 });
 
 const vemojiPicker = document.getElementById("vemojiPicker");
