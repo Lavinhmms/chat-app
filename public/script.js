@@ -293,6 +293,7 @@ const videoPanel    = document.getElementById("videoPanel");
 const videoInput    = document.getElementById("videoInput");
 const loadVideoBtn  = document.getElementById("loadVideoBtn");
 const videoStatus   = document.getElementById("videoStatus");
+const videoStatusText = document.getElementById("videoStatusText");
 const searchResults = document.getElementById("searchResults");
 const videoEmpty    = document.getElementById("videoEmpty");
 const videoQueue    = document.getElementById("videoQueue");
@@ -541,16 +542,24 @@ function searchGiphy(query, resultsEl) {
             }
             const frag = document.createDocumentFragment();
             data.results.forEach(g => {
-                const img = document.createElement("img");
-                img.src = g.url;
-                img.loading = "lazy";
-                img.decoding = "async";
-                img.addEventListener("click", () => {
+                const el = g.mp4 ? document.createElement("video") : document.createElement("img");
+                if (g.mp4) {
+                    el.src = g.mp4;
+                    el.autoplay = true;
+                    el.muted = true;
+                    el.loop = true;
+                    el.playsInline = true;
+                } else {
+                    el.src = g.url;
+                    el.loading = "lazy";
+                    el.decoding = "async";
+                }
+                el.addEventListener("click", () => {
                     socket.emit("chat message", { user: username.value, msg: "", gif: g.chat });
                     gifPicker.classList.add("hidden");
                     vgifPicker.classList.add("hidden");
                 });
-                frag.appendChild(img);
+                frag.appendChild(el);
             });
             resultsEl.appendChild(frag);
         })
@@ -874,7 +883,7 @@ window.onYouTubeIframeAPIReady = function() {
             },
             onStateChange: (e) => {
                 if (e.data === YT.PlayerState.ENDED) {
-                    videoStatus.textContent = "⏭️ Loading next from queue...";
+                    videoStatusText.textContent = "⏭️ Loading next from queue...";
                     socket.emit("video:next-from-queue");
                     stopSyncInterval();
                     return;
@@ -947,7 +956,7 @@ function showBlockedMessage(videoId) {
         "<div style='color:rgba(255,255,255,0.3);font-size:11px'>Tip: search for a lyrics or cover version</div>";
     const wrapper = document.querySelector(".video-wrapper");
     if (wrapper) wrapper.appendChild(msg);
-    videoStatus.textContent = "⚠️ Blocked — try another video";
+    videoStatusText.textContent = "⚠️ Blocked — try another video";
 }
 function hideBlockedMessage() {
     const el = document.getElementById("blockedMsg");
@@ -991,7 +1000,7 @@ function loadVideo(videoId, title) {
     }
 
     playVideoById(videoId, 0, false);
-    videoStatus.textContent = title ? ("🎬 " + title) : "🎬 Watching together!";
+    videoStatusText.textContent = title ? ("🎬 " + title) : "🎬 Watching together!";
     socket.emit("video:load", videoId);
     setTimeout(() => videoInput.focus(), 300);
 }
@@ -1001,7 +1010,7 @@ function addToQueue(videoId, title) {
     const item = { videoId, title: title || "Untitled", addedBy: username.value };
     queueList.push(item);
     socket.emit("video:add-to-queue", item);
-    videoStatus.textContent = "➕ Added to queue (" + queueList.length + "/6)";
+    videoStatusText.textContent = "➕ Added to queue (" + queueList.length + "/6)";
 }
 
 function renderQueue() {
@@ -1132,13 +1141,13 @@ socket.on("room:state", (state) => {
     if (!state.videoId) return;
     openVideoPanel();
     playVideoById(state.videoId, state.time, !state.playing);
-    videoStatus.textContent = "🎬 Synced with room!";
+    videoStatusText.textContent = "🎬 Synced with room!";
 });
 
 socket.on("video:load", (videoId) => {
     openVideoPanel();
     playVideoById(videoId, 0, false);
-    videoStatus.textContent = "🎬 Watching together!";
+    videoStatusText.textContent = "🎬 Watching together!";
 });
 
 socket.on("video:play", (time) => {
@@ -1172,7 +1181,7 @@ socket.on("video:queue-update", (q) => {
 });
 
 socket.on("video:next-playing", (title) => {
-    videoStatus.textContent = "▶️ " + title;
+    videoStatusText.textContent = "▶️ " + title;
 });
 
 socket.on("video:loop-state", (enabled) => {
@@ -1186,7 +1195,7 @@ socket.on("video:loop-restart", (videoId) => {
     stopSyncInterval();
     setPendingRemotePlay();
     player.loadVideoById({ videoId, startSeconds: 0 });
-    videoStatus.textContent = "🔁 Looping";
+    videoStatusText.textContent = "🔁 Looping";
 });
 
 // ── Video panel chat ──────────────────────────────

@@ -42,6 +42,7 @@ app.get("/api/gif-search", (req, res) => {
                 const results = (json.data || []).map(g => ({
                     id: g.id,
                     url: g.images.preview_gif?.url || g.images.fixed_height_small.url,
+                    mp4: g.images.preview?.mp4 || g.images.fixed_width_small?.mp4 || "",
                     chat: g.images.downsized.url,
                     original: g.images.original.url
                 }));

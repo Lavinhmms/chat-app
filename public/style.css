@@ -414,13 +414,15 @@ button {
     overflow-y: auto; flex: 1;
 }
 .gif-results.gif-results-empty { justify-content: center; align-items: center; padding: 30px; }
-.gif-results img {
+.gif-results img,
+.gif-results video {
     width: calc(50% - 4px); border-radius: 10px;
     cursor: pointer; transition: transform 0.15s;
     aspect-ratio: 16/9; object-fit: cover;
     background: rgba(255,255,255,0.05);
 }
-.gif-results img:hover { transform: scale(1.03); }
+.gif-results img:hover,
+.gif-results video:hover { transform: scale(1.03); }
 .gif-loading {
     width: 100%; text-align: center;
     padding: 30px; color: rgba(255,255,255,0.4); font-size: 13px;
@@ -428,7 +430,8 @@ button {
 
 /* Video panel GIF picker - smaller, positioned differently */
 .gif-picker-video { bottom: 52px; left: 8px; right: 8px; max-height: 260px; }
-.gif-picker-video .gif-results img { width: calc(50% - 4px); }
+.gif-picker-video .gif-results img,
+.gif-picker-video .gif-results video { width: calc(50% - 4px); }
 
 /* IMAGE/UPLOAD BUTTONS */
 #imageBtn, #vimageBtn, #gifBtn, #vgifBtn {
