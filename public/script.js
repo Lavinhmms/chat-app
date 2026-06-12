@@ -1040,20 +1040,34 @@ const videoBottom   = document.getElementById("videoBottom");
 const bottomResize  = document.getElementById("bottomResize");
 let isResizing      = false;
 
-bottomResize.addEventListener("mousedown", (e) => {
+function resizeStart(e) {
     isResizing = true;
     document.body.style.cursor = "ns-resize";
     document.body.style.userSelect = "none";
     document.addEventListener("mousemove", onResize);
     document.addEventListener("mouseup", stopResize);
-});
+    document.addEventListener("touchmove", onResizeTouch, { passive: false });
+    document.addEventListener("touchend", stopResize);
+    document.addEventListener("touchcancel", stopResize);
+}
+bottomResize.addEventListener("mousedown", resizeStart);
+bottomResize.addEventListener("touchstart", resizeStart, { passive: true });
+
+function getResizeY(e) {
+    return e.touches ? e.touches[0].clientY : e.clientY;
+}
 
 function onResize(e) {
     if (!isResizing) return;
     const panelRect = videoBottom.parentElement.getBoundingClientRect();
-    const newHeight = panelRect.bottom - e.clientY;
+    const newHeight = panelRect.bottom - getResizeY(e);
     const clamped = Math.max(80, Math.min(newHeight, window.innerHeight * 0.6));
     videoBottom.style.height = clamped + "px";
+}
+
+function onResizeTouch(e) {
+    if (e.cancelable) e.preventDefault();
+    onResize(e);
 }
 
 function stopResize() {
@@ -1062,6 +1076,9 @@ function stopResize() {
     document.body.style.userSelect = "";
     document.removeEventListener("mousemove", onResize);
     document.removeEventListener("mouseup", stopResize);
+    document.removeEventListener("touchmove", onResizeTouch);
+    document.removeEventListener("touchend", stopResize);
+    document.removeEventListener("touchcancel", stopResize);
 }
 
 const INVIDIOUS = [
@@ -1413,9 +1430,10 @@ let panelStartX = 0, panelStartY = 0;
 let isDragging = false;
 
 callPanelHeader.addEventListener("mousedown", startDrag);
-callPanelHeader.addEventListener("touchstart", startDrag, { passive: true });
+callPanelHeader.addEventListener("touchstart", startDrag, { passive: false });
 
 function startDrag(e) {
+    if (e.cancelable) e.preventDefault();
     isDragging = true;
     dragged    = false;
 
@@ -1461,6 +1479,7 @@ function onDrag(e) {
 
 function stopDrag() {
     isDragging = false;
+    dragged    = false;
     document.removeEventListener("mousemove", onDrag);
     document.removeEventListener("mouseup",   stopDrag);
     document.removeEventListener("touchmove", onDrag);
