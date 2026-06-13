@@ -1730,6 +1730,9 @@ function leaveCall() {
     callPipRow.querySelectorAll(".call-pip-tile").forEach(el => {
         if (el.dataset.socketId !== socket.id) el.remove();
     });
+    if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+    }
     callBtn.classList.remove("in-call");
     micEnabled    = true;
     cameraEnabled = true;
@@ -2272,4 +2275,27 @@ socket.on("call:rejected", ({ socketId, username: name }) => {
     if (!isCalling) return;
     joinCallBtn.textContent = "❌ " + name + " declined";
     setTimeout(() => { if (isCalling) cancelCall(); }, 2000);
+});
+
+// ── Picture-in-Picture (keep video playing when tab is hidden) ──────
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden && inCall && document.pictureInPictureEnabled) {
+        const localTileId = "tile-" + socket.id;
+        const remoteVideo = document.querySelector(
+            ".call-video-tile video, .call-pip-tile video"
+        );
+        const tiles = document.querySelectorAll(".call-video-tile, .call-pip-tile");
+        let vid = null;
+        for (const t of tiles) {
+            if (t.id !== localTileId) {
+                vid = t.querySelector("video");
+                if (vid) break;
+            }
+        }
+        if (vid && vid.srcObject && vid.srcObject.active && !document.pictureInPictureElement) {
+            vid.requestPictureInPicture().catch(() => {});
+        }
+    } else if (!document.hidden && document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+    }
 });
