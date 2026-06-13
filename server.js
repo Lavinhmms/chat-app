@@ -143,7 +143,8 @@ io.on("connection", (socket) => {
                 callUsers: {},
                 roomPassword: "",
                 admins: new Set(),
-                loopEnabled: false
+                loopEnabled: false,
+                raisedHands: {}
             };
         }
         const room = rooms[roomId];
@@ -154,6 +155,7 @@ io.on("connection", (socket) => {
         room.queue = [];
         room.callUsers = {};
         room.loopEnabled = false;
+        room.raisedHands = {};
 
         socket.roomId = roomId;
         socket.join(roomId);
@@ -388,6 +390,42 @@ io.on("connection", (socket) => {
         io.to(data.to).emit("call:rejected", { socketId: socket.id, username: room ? (room.users[socket.id] || "Unknown") : "Unknown" });
     });
 
+    // ── Participants management ────────────────────
+    socket.on("participants:rename", ({ socketId, newName }) => {
+        const room = getRoom(socket);
+        if (!room || !newName) return;
+        if (socketId && socketId !== socket.id) {
+            if (!room.admins.has(socket.id)) return;
+        }
+        const targetId = (socketId && socketId !== socket.id) ? socketId : socket.id;
+        room.users[targetId] = newName;
+        io.to(socket.roomId).emit("users", Object.entries(room.users).map(([id, u]) => ({ id, username: u })));
+    });
+
+    socket.on("participants:raise-hand", () => {
+        const room = getRoom(socket);
+        if (!room) return;
+        if (!room.raisedHands) room.raisedHands = {};
+        if (room.raisedHands[socket.id]) {
+            delete room.raisedHands[socket.id];
+        } else {
+            room.raisedHands[socket.id] = true;
+        }
+        io.to(socket.roomId).emit("participants:hand-status", { socketId: socket.id, raised: !!room.raisedHands[socket.id] });
+    });
+
+    socket.on("participants:host-mute", (targetId) => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        io.to(targetId).emit("participants:host-muted");
+    });
+
+    socket.on("participants:host-stop-video", (targetId) => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        io.to(targetId).emit("participants:host-stopped-video");
+    });
+
     // ── Leave room ─────────────────────────────────
     socket.on("room:leave", (data) => {
         const roomId = (data && data.roomId) || socket.roomId;
@@ -395,6 +433,9 @@ io.on("connection", (socket) => {
         const room = rooms[roomId];
         if (room) {
             delete room.users[socket.id];
+            if (room.raisedHands && room.raisedHands[socket.id]) {
+                delete room.raisedHands[socket.id];
+            }
             if (room.callUsers[socket.id]) {
                 delete room.callUsers[socket.id];
                 socket.to(roomId).emit("call:user-left", socket.id);
@@ -440,6 +481,9 @@ io.on("connection", (socket) => {
         const wasAdmin = room.admins.has(socket.id);
         if (wasAdmin) room.admins.delete(socket.id);
         delete room.users[socket.id];
+        if (room.raisedHands && room.raisedHands[socket.id]) {
+            delete room.raisedHands[socket.id];
+        }
         socket.to(roomId).emit("call:canceled");
         io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
         if (room.callUsers[socket.id]) {

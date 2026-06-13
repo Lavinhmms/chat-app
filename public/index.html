@@ -210,10 +210,76 @@
     </div>
     <div class="call-pip-row" id="callPipRow"></div>
     <div class="call-videos" id="callVideos"></div>
-    <div class="call-controls">
-        <button id="toggleMicBtn"    class="call-control-btn">🎤 Mute</button>
-        <button id="toggleCameraBtn" class="call-control-btn">📷 Camera Off</button>
-        <button id="joinCallBtn"     class="call-control-btn active">📹 Call</button>
+    <div class="call-controls" id="callControls">
+        <button id="joinCallBtn" class="call-control-btn">📹 Call</button>
+        <button id="toggleCameraBtn" class="call-control-btn" title="Camera On/Off">📷</button>
+        <button id="toggleMicBtn" class="call-control-btn" title="Mic On/Off">🎤</button>
+        <button id="endCallBtn" class="call-control-btn danger hidden" title="End Call">📞</button>
+    </div>
+
+    <!-- Mic Settings Dropdown -->
+    <div id="micSettings" class="settings-dropdown hidden" data-setting="mic">
+        <div class="settings-title">Microphone</div>
+        <select id="micSelect"></select>
+        <div class="setting-row">
+            <button id="testSpeakerBtn" class="setting-btn">🔊 Test Speaker</button>
+        </div>
+        <label class="setting-toggle">
+            <input type="checkbox" id="noiseSuppressionToggle" checked />
+            <span>Noise Suppression</span>
+        </label>
+    </div>
+
+    <!-- Camera Settings Dropdown -->
+    <div id="camSettings" class="settings-dropdown hidden" data-setting="cam">
+        <div class="settings-title">Camera</div>
+        <select id="camSelect"></select>
+        <div class="settings-title">Virtual Background</div>
+        <div class="bg-options" id="bgOptions">
+            <button class="bg-opt active" data-bg="none">None</button>
+            <button class="bg-opt" data-bg="blur">Blur</button>
+            <button class="bg-opt" data-bg="color">Color</button>
+            <button class="bg-opt" data-bg="image">Image</button>
+        </div>
+        <div class="settings-title">Video Filter</div>
+        <select id="videoFilterSelect">
+            <option value="none">None</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="sepia">Sepia</option>
+            <option value="invert">Invert</option>
+            <option value="vintage">Vintage</option>
+        </select>
+    </div>
+
+    <!-- End Meeting Dropdown -->
+    <div id="endMeetingDropdown" class="settings-dropdown hidden" data-setting="end">
+        <button class="end-option" id="leaveMeetingBtn">🚪 Leave Meeting</button>
+        <button class="end-option danger" id="endForAllBtn">⛔ End Meeting for All</button>
+    </div>
+
+    <!-- Participants Panel -->
+    <div id="participantsPanel" class="participants-panel hidden">
+        <div class="pp-header">
+            <span>Participants (<span id="ppCount">0</span>)</span>
+            <button id="closeParticipantsBtn" class="pp-close">✕</button>
+        </div>
+        <div id="participantsList" class="pp-list"></div>
+        <div class="pp-self-actions">
+            <button id="raiseHandBtn" class="pp-action-btn">✋ Raise Hand</button>
+            <button id="renameBtn" class="pp-action-btn">✏️ Rename</button>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Modal -->
+<div id="renameModal" class="rename-modal hidden">
+    <div class="rename-modal-card">
+        <h3>✏️ Rename</h3>
+        <input id="renameInput" placeholder="Enter new name..." maxlength="30" />
+        <div class="rename-actions">
+            <button class="rename-cancel" id="renameCancelBtn">Cancel</button>
+            <button class="rename-save" id="renameSaveBtn">Save</button>
+        </div>
     </div>
 </div>
 
