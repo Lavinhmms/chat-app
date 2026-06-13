@@ -772,13 +772,33 @@ document.addEventListener("paste", (e) => {
 let pipVideo = null;
 let pipActive = false;
 let pipLeaveTime = 0;
+let ytWasPlaying = false;
+let bgAudioCtx = null;
+
+function startBgAudioCtx() {
+    if (bgAudioCtx) return;
+    try {
+        bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = bgAudioCtx.createOscillator();
+        const gain = bgAudioCtx.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain).connect(bgAudioCtx.destination);
+        osc.start();
+    } catch(e) { /* silent */ }
+}
+function stopBgAudioCtx() {
+    if (bgAudioCtx) {
+        try { bgAudioCtx.close(); } catch(e) {}
+        bgAudioCtx = null;
+    }
+}
 
 function isPipSupported() {
     return 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
 }
 
 async function enterPip(videoId, currentTime) {
-    if (!isPipSupported() || pipActive) return;
+    if (pipActive) return;
     try {
         const resp = await fetch(`/api/video-stream?videoId=${videoId}`);
         const data = await resp.json();
@@ -797,14 +817,16 @@ async function enterPip(videoId, currentTime) {
         await pipVideo.play();
         pipLeaveTime = currentTime;
 
-        setTimeout(async () => {
-            if (pipVideo && !pipVideo.paused && isPipSupported()) {
-                try {
-                    await pipVideo.requestPictureInPicture();
-                    pipActive = true;
-                } catch(e) { console.warn("PiP request failed:", e); }
-            }
-        }, 300);
+        if (isPipSupported()) {
+            setTimeout(async () => {
+                if (pipVideo && !pipVideo.paused) {
+                    try {
+                        await pipVideo.requestPictureInPicture();
+                        pipActive = true;
+                    } catch(e) { console.warn("PiP request failed:", e); }
+                }
+            }, 300);
+        }
     } catch(e) { console.warn("PiP enter error:", e); if (pipVideo) { pipVideo.remove(); pipVideo = null; } }
 }
 
@@ -845,26 +867,37 @@ function updateMediaSession(title) {
 
 document.addEventListener("visibilitychange", async () => {
     if (document.hidden) {
-        if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
-            const ct = player.getCurrentTime();
-            enterPip(currentVideoId, ct);
+        if (player && playerReady) {
+            const state = player.getPlayerState();
+            ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
+            if (ytWasPlaying) {
+                const ct = player.getCurrentTime();
+                enterPip(currentVideoId, ct);
+            }
         }
+        startBgAudioCtx();
     } else {
+        stopBgAudioCtx();
         const time = await exitPip();
-        if (time && player && playerReady) {
-            stopSyncInterval();
-            player.seekTo(time, true);
-            if (player.getPlayerState() !== YT.PlayerState.PLAYING) {
+        if (player && playerReady) {
+            if (time != null) {
+                stopSyncInterval();
+                player.seekTo(time, true);
+            }
+            if (ytWasPlaying && player.getPlayerState() !== YT.PlayerState.PLAYING) {
                 setPendingRemotePlay();
                 player.playVideo();
             }
-            setTimeout(() => {
-                if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
-                    startSyncInterval();
-                    socket.emit("video:sync", time);
-                }
-            }, 500);
+            if (time != null) {
+                setTimeout(() => {
+                    if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
+                        startSyncInterval();
+                        socket.emit("video:sync", time);
+                    }
+                }, 500);
+            }
         }
+        ytWasPlaying = false;
     }
 });
 
