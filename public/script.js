@@ -1476,6 +1476,8 @@ async function startCalling() {
         addVideoTile(socket.id, username.value, localStream, true);
     }
     applyBgAndFilter();
+    const localVid = document.querySelector("#tile-" + socket.id + " video");
+    if (localVid) openPip(localVid);
     micEnabled = true;
     cameraEnabled = true;
     updateMicUI();
@@ -1609,6 +1611,8 @@ callPanelHeader.addEventListener("mousedown", startDrag);
 callPanelHeader.addEventListener("touchstart", startDrag, { passive: false });
 
 function startDrag(e) {
+    const target = e.target;
+    if (target === minimizeCallBtn || target === maximizeCallBtn || target === closeCallBtn) return;
     if (e.cancelable) e.preventDefault();
     isDragging = true;
     dragged    = false;
@@ -1684,6 +1688,8 @@ async function joinCall() {
             addVideoTile(socket.id, username.value, localStream, true);
         }
         applyBgAndFilter();
+        const localVid2 = document.querySelector("#tile-" + socket.id + " video");
+        if (localVid2) openPip(localVid2);
         micEnabled = true;
         cameraEnabled = true;
         updateMicUI();
@@ -1730,9 +1736,7 @@ function leaveCall() {
     callPipRow.querySelectorAll(".call-pip-tile").forEach(el => {
         if (el.dataset.socketId !== socket.id) el.remove();
     });
-    if (document.pictureInPictureElement) {
-        document.exitPictureInPicture().catch(() => {});
-    }
+    closePip();
     callBtn.classList.remove("in-call");
     micEnabled    = true;
     cameraEnabled = true;
@@ -2122,6 +2126,8 @@ function addVideoTile(socketId, name, stream, isLocal) {
     pip.appendChild(pipVideo);
     pip.appendChild(pipName);
     callPipRow.appendChild(pip);
+
+    if (!isLocal) switchPipToRemote();
 }
 
 function removeVideoTile(socketId) {
@@ -2149,6 +2155,7 @@ function createPeer(remoteSocketId, initiator) {
         if (existingPip) {
             existingPip.querySelector("video").srcObject = remoteStream;
         }
+        switchPipToRemote();
     };
 
     pc.onicecandidate = (e) => {
@@ -2278,24 +2285,42 @@ socket.on("call:rejected", ({ socketId, username: name }) => {
 });
 
 // ── Picture-in-Picture (keep video playing when tab is hidden) ──────
+let pipRequested = false;
+function openPip(videoEl) {
+    if (!document.pictureInPictureEnabled || document.pictureInPictureElement) return;
+    videoEl.requestPictureInPicture().then(() => { pipRequested = true; }).catch(() => {});
+}
+function switchPipToRemote() {
+    if (!pipRequested) return;
+    const tiles = document.querySelectorAll(".call-video-tile, .call-pip-tile");
+    for (const t of tiles) {
+        if (t.id !== "tile-" + socket.id) {
+            const remVid = t.querySelector("video");
+            if (remVid && remVid.srcObject && remVid.srcObject.active) {
+                remVid.requestPictureInPicture().then(() => { pipRequested = true; }).catch(() => {});
+            }
+            break;
+        }
+    }
+}
+function closePip() {
+    pipRequested = false;
+    if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+    }
+}
+// Re-request PiP when tab becomes hidden if it was closed
 document.addEventListener("visibilitychange", () => {
-    if (document.hidden && inCall && document.pictureInPictureEnabled) {
-        const localTileId = "tile-" + socket.id;
-        const remoteVideo = document.querySelector(
-            ".call-video-tile video, .call-pip-tile video"
-        );
+    if (document.hidden && inCall && !document.pictureInPictureElement) {
         const tiles = document.querySelectorAll(".call-video-tile, .call-pip-tile");
-        let vid = null;
         for (const t of tiles) {
-            if (t.id !== localTileId) {
-                vid = t.querySelector("video");
-                if (vid) break;
+            if (t.id !== "tile-" + socket.id) {
+                const rv = t.querySelector("video");
+                if (rv && rv.srcObject && rv.srcObject.active) {
+                    rv.requestPictureInPicture().then(() => { pipRequested = true; }).catch(() => {});
+                }
+                break;
             }
         }
-        if (vid && vid.srcObject && vid.srcObject.active && !document.pictureInPictureElement) {
-            vid.requestPictureInPicture().catch(() => {});
-        }
-    } else if (!document.hidden && document.pictureInPictureElement) {
-        document.exitPictureInPicture().catch(() => {});
     }
 });
