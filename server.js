@@ -484,13 +484,13 @@ io.on("connection", (socket) => {
         if (room.raisedHands && room.raisedHands[socket.id]) {
             delete room.raisedHands[socket.id];
         }
-        socket.to(roomId).emit("call:canceled");
-        io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
         if (room.callUsers[socket.id]) {
             delete room.callUsers[socket.id];
             socket.to(roomId).emit("call:user-left", socket.id);
+            socket.to(roomId).emit("call:canceled");
             io.to(roomId).emit("call:participants", Object.keys(room.callUsers).length);
         }
+        io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
         if (!room.admins.size && Object.keys(room.users).length > 0) {
             room.admins.add(Object.keys(room.users)[0]);
             io.to(Object.keys(room.users)[0]).emit("auth:status", { hasPassword: !!room.roomPassword, isAdmin: true });

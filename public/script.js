@@ -29,6 +29,9 @@ const roomTitle     = document.getElementById("roomTitle");
 let currentRoomId = null;
 let lastRoomId = null;
 let intentionalLeave = false;
+let disconnected = false;
+let reconnectTimer = null;
+let currentRoomPassword = "";
 
 lobbyName.focus();
 
@@ -57,7 +60,8 @@ createRoomBtn.addEventListener("click", () => {
     showLobbyError("");
     createRoomBtn.disabled = true;
     createRoomBtn.textContent = "Creating...";
-    socket.emit("room:create", { name, roomName, password: createRoomPassword.value });
+    currentRoomPassword = createRoomPassword.value;
+    socket.emit("room:create", { name, roomName, password: currentRoomPassword });
 });
 
 createRoomName.addEventListener("keydown", (e) => {
@@ -99,8 +103,10 @@ function joinRoom(roomId, hasPassword) {
     if (hasPassword) {
         const pw = prompt("Enter room password:");
         if (pw === null) return;
+        currentRoomPassword = pw;
         socket.emit("room:join", { roomId, name, password: pw });
     } else {
+        currentRoomPassword = "";
         socket.emit("room:join", { roomId, name, password: "" });
     }
 }
@@ -180,6 +186,9 @@ socket.on("room:ended", () => {
 
 // ── Leave room button (top menu) ──
 function goToLobby(msg) {
+    disconnected = false;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    showReconnectingBanner(false);
     if (inCall) leaveCall();
     stopRingtone();
     incomingCallOverlay.classList.add("hidden");
@@ -225,19 +234,50 @@ document.getElementById("topMenuDropdown").appendChild(leaveBtn);
 // ── Socket disconnect ──
 socket.on("disconnect", () => {
     if (intentionalLeave) { intentionalLeave = false; return; }
-    goToLobby("Disconnected from server");
+    if (!currentRoomId) return;
+    disconnected = true;
+    showReconnectingBanner(true);
+    reconnectTimer = setTimeout(() => {
+        if (disconnected) {
+            disconnected = false;
+            showReconnectingBanner(false);
+            goToLobby("Connection lost");
+        }
+    }, 10000);
 });
 
 socket.on("connect", () => {
-    // Clean up stale room from previous session if room:leave didn't arrive
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
+    if (disconnected && currentRoomId && username.value) {
+        disconnected = false;
+        showReconnectingBanner(false);
+        socket.emit("room:join", { roomId: currentRoomId, name: username.value, password: currentRoomPassword });
+        return;
+    }
+
     if (lastRoomId) {
         socket.emit("room:leave", { roomId: lastRoomId });
         lastRoomId = null;
     }
     if (!lobby.classList.contains("hidden")) return;
-    // Reconnected while in a room — go back to lobby
     goToLobby("Reconnected");
 });
+
+function showReconnectingBanner(show) {
+    let banner = document.getElementById("reconnectBanner");
+    if (!show) {
+        if (banner) banner.remove();
+        return;
+    }
+    if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "reconnectBanner";
+        banner.textContent = "⚡ Reconnecting...";
+        banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:10000;background:#f59e0b;color:#000;text-align:center;padding:8px 16px;font-size:14px;font-weight:600;";
+        document.body.appendChild(banner);
+    }
+}
 
 /* ===================================
    LOGIN LOCK — now handled by lobby
@@ -265,8 +305,15 @@ socket.on("auth:status", ({ hasPassword, isAdmin: admin }) => {
 socket.on("auth:error", (msg) => {
     createRoomBtn.disabled = false;
     createRoomBtn.textContent = "Create Room";
-    showLobbyError(msg);
-    setTimeout(() => showLobbyError(""), 3000);
+    if (!lobby.classList.contains("hidden")) {
+        showLobbyError(msg);
+        setTimeout(() => showLobbyError(""), 3000);
+        return;
+    }
+    disconnected = false;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    showReconnectingBanner(false);
+    goToLobby(msg);
 });
 
 socket.on("auth:kicked", () => {
