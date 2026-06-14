@@ -159,8 +159,10 @@ body.light .sidebar::after { background: rgba(0,0,0,0.08); }
     width: 28px; height: 28px; border: none; border-radius: 8px;
     background: rgba(220,38,38,0.3); color: #fca5a5;
     font-size: 11px; cursor: pointer; flex-shrink: 0;
-    display: none; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.15s;
 }
+.online-section li:hover .kick-btn { opacity: 1; }
 .online-section li .kick-btn:hover { background: rgba(220,38,38,0.6); }
 body.light .online-section li { background: rgba(0,0,0,0.06); color: #374151; }
 
@@ -1322,4 +1324,237 @@ body.light .hamburger { background: rgba(0,0,0,0.1); color: #111; }
     .top-menu-dropdown { min-width: 180px; }
     .dropdown-item { height: 40px; font-size: 13px; }
     .call-pip-tile { width: 60px; height: 45px; }
+}
+
+/* =========================
+   MESSAGE REACTIONS
+========================= */
+.message-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+    min-height: 0;
+}
+.reaction-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    border-radius: 12px;
+    font-size: 11px;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.6);
+    cursor: default;
+    user-select: none;
+    line-height: 1.6;
+}
+.reaction-badge.active {
+    background: rgba(56,189,248,0.2);
+    color: #38bdf8;
+}
+.self .reaction-badge {
+    background: rgba(0,0,0,0.08);
+    color: rgba(0,0,0,0.5);
+}
+.self .reaction-badge.active {
+    background: rgba(0,0,0,0.15);
+    color: #000;
+}
+
+/* Reaction trigger button — WhatsApp-style: visible on hover (desktop), always on mobile */
+.reaction-trigger {
+    position: absolute;
+    bottom: -10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(30,30,50,0.9);
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s, transform 0.15s;
+}
+.message:hover .reaction-trigger {
+    opacity: 1;
+    pointer-events: auto;
+}
+.reaction-trigger:hover {
+    transform: scale(1.2);
+    color: white;
+}
+.self .reaction-trigger {
+    right: auto;
+    left: 10px;
+}
+
+@media (pointer: coarse) {
+    .reaction-trigger {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Reaction picker bar — shown on hover (desktop) or via .visible class */
+.reaction-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 2px;
+    position: fixed;
+    transform-origin: bottom right;
+    transform: scale(0.92);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    background: rgba(20,20,35,0.97);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 24px;
+    padding: 4px 6px;
+    z-index: 9999;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+}
+.message:hover .reaction-bar,
+.reaction-bar.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+    pointer-events: auto;
+}
+.reaction-opt {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 17px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+    user-select: none;
+    flex-shrink: 0;
+}
+.reaction-opt:hover {
+    background: rgba(255,255,255,0.12);
+    transform: scale(1.2) translateY(-3px);
+}
+.reaction-more {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 18px;
+    font-weight: bold;
+    color: rgba(255,255,255,0.45);
+    background: rgba(255,255,255,0.06);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+}
+.reaction-more:hover {
+    background: rgba(255,255,255,0.15);
+    color: white;
+}
+
+/* "More emojis" popup, opens above the reaction bar */
+.more-reactions-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    width: 196px;
+    background: rgba(20,20,35,0.97);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 6px;
+    z-index: 60;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    animation: dropIn 0.15s ease;
+}
+.more-reactions-popup.below {
+    bottom: auto;
+    top: 100%;
+    margin-bottom: 0;
+    margin-top: 8px;
+}
+
+/* Light theme */
+body.light .reaction-trigger {
+    background: rgba(255,255,255,0.95);
+    color: rgba(0,0,0,0.5);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+body.light .reaction-trigger:hover {
+    color: #000;
+}
+body.light .reaction-bar {
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+}
+body.light .reaction-opt:hover {
+    background: rgba(0,0,0,0.08);
+}
+body.light .reaction-more {
+    background: rgba(0,0,0,0.05);
+    color: rgba(0,0,0,0.4);
+}
+body.light .reaction-more:hover {
+    background: rgba(0,0,0,0.1);
+    color: #000;
+}
+body.light .more-reactions-popup {
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+}
+
+.message {
+    position: relative;
+}
+
+@media (max-width: 768px) {
+    .reaction-trigger {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .reaction-opt, .reaction-more {
+        width: 30px;
+        height: 30px;
+        font-size: 17px;
+    }
+    .more-reactions-popup {
+        width: 172px;
+    }
+}
+
+/* =========================
+   USER STATUS
+========================= */
+.online-section li span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }

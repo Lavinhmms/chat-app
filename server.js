@@ -66,8 +66,15 @@ app.get("/api/video-stream", async (req, res) => {
     const videoId = req.query.videoId;
     if (!videoId) return res.status(400).json({ error: "missing videoId" });
     try {
-        const info = await ytdl.getInfo(videoId);
-        const format = ytdl.chooseFormat(info.formats, { quality: "lowest" });
+        const info = await ytdl.getInfo(videoId, {
+            requestOptions: {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                    "Accept-Language": "en-US,en;q=0.9"
+                }
+            }
+        });
+        const format = ytdl.chooseFormat(info.formats, { quality: "lowest", filter: "audioandvideo" });
         if (!format || !format.url) return res.status(500).json({ error: "no format" });
         res.json({ url: format.url });
     } catch(e) {
@@ -144,7 +151,9 @@ io.on("connection", (socket) => {
                 roomPassword: "",
                 admins: new Set(),
                 loopEnabled: false,
-                raisedHands: {}
+                raisedHands: {},
+                reactions: {},
+                userStatus: {}
             };
         }
         const room = rooms[roomId];
@@ -156,6 +165,8 @@ io.on("connection", (socket) => {
         room.callUsers = {};
         room.loopEnabled = false;
         room.raisedHands = {};
+        room.reactions = {};
+        room.userStatus = {};
 
         socket.roomId = roomId;
         socket.join(roomId);
@@ -238,6 +249,41 @@ io.on("connection", (socket) => {
     socket.on("stop typing", () => {
         if (!socket.roomId) return;
         socket.to(socket.roomId).emit("stop typing");
+    });
+
+    // ── Message reactions ──────────────────────────
+    socket.on("message:react", ({ messageId, emoji }) => {
+        const room = getRoom(socket);
+        if (!room || !messageId || !emoji) return;
+        if (!room.reactions) room.reactions = {};
+        if (!room.reactions[messageId]) room.reactions[messageId] = {};
+        const msgReactions = room.reactions[messageId];
+        // Remove user from any existing reaction on this message
+        let alreadyReacted = false;
+        Object.keys(msgReactions).forEach(e => {
+            const arr = msgReactions[e];
+            const idx = arr.indexOf(socket.id);
+            if (idx > -1) {
+                arr.splice(idx, 1);
+                if (arr.length === 0) delete msgReactions[e];
+                if (e === emoji) alreadyReacted = true;
+            }
+        });
+        // Add user to new emoji (unless they just toggled off the same one)
+        if (!alreadyReacted) {
+            if (!msgReactions[emoji]) msgReactions[emoji] = [];
+            msgReactions[emoji].push(socket.id);
+        }
+        io.to(socket.roomId).emit("message:reactions-update", { messageId, reactions: { ...msgReactions } });
+    });
+
+    // ── User status ────────────────────────────────
+    socket.on("user:status", (status) => {
+        const room = getRoom(socket);
+        if (!room) return;
+        if (!room.userStatus) room.userStatus = {};
+        room.userStatus[socket.id] = status;
+        socket.to(socket.roomId).emit("user:status-update", { socketId: socket.id, status });
     });
 
     // ── Video sync ────────────────────────────────
@@ -433,6 +479,10 @@ io.on("connection", (socket) => {
         const room = rooms[roomId];
         if (room) {
             delete room.users[socket.id];
+            if (room.userStatus && room.userStatus[socket.id]) {
+                delete room.userStatus[socket.id];
+                socket.to(roomId).emit("user:status-update", { socketId: socket.id, status: "offline" });
+            }
             if (room.raisedHands && room.raisedHands[socket.id]) {
                 delete room.raisedHands[socket.id];
             }
@@ -481,6 +531,10 @@ io.on("connection", (socket) => {
         const wasAdmin = room.admins.has(socket.id);
         if (wasAdmin) room.admins.delete(socket.id);
         delete room.users[socket.id];
+        if (room.userStatus && room.userStatus[socket.id]) {
+            delete room.userStatus[socket.id];
+            socket.to(roomId).emit("user:status-update", { socketId: socket.id, status: "offline" });
+        }
         if (room.raisedHands && room.raisedHands[socket.id]) {
             delete room.raisedHands[socket.id];
         }

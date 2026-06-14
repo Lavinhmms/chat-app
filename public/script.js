@@ -5,7 +5,14 @@ const username      = document.getElementById("username");
 const chat          = document.getElementById("chat");
 const usersList     = document.getElementById("users");
 let   isAdmin       = false;
+let   lastActivity  = Date.now();
+let   userStatus    = "online";
+const REACT_EMOJIS = ["👍", "❤️", "😂", "😮"];
+const MORE_REACT_EMOJIS = ["😢","🙏","🔥","🎉","👏","💯","😡","🥺","😎","🤔","💔","✨","😴","🙌"];
 
+function generateMessageId() {
+    return socket.id + "-" + Date.now();
+}
 
 
 /* ===================================
@@ -143,24 +150,10 @@ socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name,
     // Populate users
     if (users) {
         roomUsersMap = {};
-        const ul = document.getElementById("users");
-        ul.innerHTML = "";
-        users.forEach(({ id, username: name }) => {
-            roomUsersMap[id] = name;
-            const li = document.createElement("li");
-            li.innerHTML = "<span>🟢 " + name + "</span>";
-            if (admin && id !== socket.id) {
-                const kickBtn = document.createElement("button");
-                kickBtn.className = "kick-btn";
-                kickBtn.textContent = "✕";
-                kickBtn.title = name;
-                kickBtn.addEventListener("click", () => {
-                    if (confirm("Kick " + name + "?")) socket.emit("auth:kick", id);
-                });
-                li.appendChild(kickBtn);
-            }
-            ul.appendChild(li);
-        });
+        users.forEach(({ id, username: name }) => { roomUsersMap[id] = name; });
+        userStatusMap = {};
+        users.forEach(({ id }) => { userStatusMap[id] = "online"; });
+        renderUserList();
         ppCount.textContent = users.length;
     }
 
@@ -177,6 +170,11 @@ socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name,
     loopBtn.title = "Loop";
     queueList = [];
     renderQueue();
+
+    // Initial user status
+    lastActivity = Date.now();
+    userStatus = "online";
+    socket.emit("user:status", "online");
 });
 
 // ── Room ended ──
@@ -206,6 +204,7 @@ function goToLobby(msg) {
     }
     isAdmin = false;
     handRaised = false;
+    userStatusMap = {};
     document.getElementById("adminSection").classList.add("hidden");
     document.querySelector(".online-section h3").textContent = "Online";
     document.getElementById("users").innerHTML = "";
@@ -381,6 +380,48 @@ document.getElementById("themeToggle").addEventListener("click", () => {
     }
 });
 
+// ── User status tracking ─────────────────────────
+const STATUS_EVENTS = ["mousemove", "keydown", "click", "touchstart", "focus"];
+function onUserActivity() {
+    lastActivity = Date.now();
+    if (userStatus !== "online") {
+        userStatus = "online";
+        socket.emit("user:status", "online");
+    }
+}
+STATUS_EVENTS.forEach(ev => document.addEventListener(ev, onUserActivity, { passive: true }));
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        userStatus = "away";
+        socket.emit("user:status", "away");
+    } else {
+        onUserActivity();
+    }
+});
+window.addEventListener("blur", () => {
+    userStatus = "away";
+    socket.emit("user:status", "away");
+});
+window.addEventListener("focus", onUserActivity);
+setInterval(() => {
+    const elapsed = Date.now() - lastActivity;
+    let newStatus;
+    if (elapsed > 120000) newStatus = "away";
+    else if (elapsed > 30000) newStatus = "idle";
+    else newStatus = "online";
+    if (newStatus !== userStatus) {
+        userStatus = newStatus;
+        socket.emit("user:status", userStatus);
+    }
+}, 15000);
+
+function statusDot(status) {
+    if (status === "online") return "🟢";
+    if (status === "idle") return "🟡";
+    if (status === "away") return "⚫";
+    return "⚫";
+}
+
 // ── Sidebar ───────────────────────────────────────
 function openSidebar()  { sidebar.classList.add("open");    sidebarOverlay.classList.add("visible"); }
 function closeSidebar() { sidebar.classList.remove("open"); sidebarOverlay.classList.remove("visible"); }
@@ -457,15 +498,16 @@ form.addEventListener("submit", (e) => {
     const msgText = input.value.trim();
     if ((!msgText && !pendingImage) || !username.value.trim()) return;
 
+    const msgId = generateMessageId();
     if (pendingImage) {
         uploadImage(pendingImage).then(url => {
             if (url) {
-                socket.emit("chat message", { user: username.value, msg: msgText, image: url });
+                socket.emit("chat message", { id: msgId, user: username.value, msg: msgText, image: url });
             }
             clearPending("main");
         });
     } else {
-        socket.emit("chat message", { user: username.value, msg: msgText });
+        socket.emit("chat message", { id: msgId, user: username.value, msg: msgText });
     }
     input.value = "";
     socket.emit("stop typing");
@@ -476,17 +518,179 @@ function appendMessage(data, container) {
     div.classList.add("message");
     if (data.user === username.value) div.classList.add("self");
     else if (container === chat) playNotification();
+    if (data.id) div.dataset.id = data.id;
     let html = "<strong>" + data.user + "</strong>" + data.msg;
     if (data.image) html += '<img class="message-media" src="' + data.image + '" onclick="window.open(this.src)" loading="lazy" />';
     if (data.gif) html += '<img class="message-media" src="' + data.gif + '" loading="lazy" />';
     div.innerHTML = html;
+
+    const reactionsDiv = document.createElement("div");
+    reactionsDiv.className = "message-reactions";
+    div.appendChild(reactionsDiv);
+
+    // Long press / double-tap for WhatsApp-style reactions
+    let longPressTimer = null;
+    let longPressTriggered = false;
+    let lastTapTime = 0;
+
+    div.addEventListener("click", (e) => {
+        if (longPressTriggered) { longPressTriggered = false; return; }
+        const now = Date.now();
+        if (now - lastTapTime < 350) {
+            e.preventDefault();
+            if (data.id) socket.emit("message:react", { messageId: data.id, emoji: "👍" });
+            lastTapTime = 0;
+            return;
+        }
+        lastTapTime = now;
+    });
+
+    div.addEventListener("touchstart", (e) => {
+        longPressTriggered = false;
+        longPressTimer = setTimeout(() => {
+            longPressTriggered = true;
+            if (data.id && !e.target.closest(".message-reactions")) {
+                showReactionBarAt(data.id, div);
+            }
+        }, 500);
+    }, { passive: true });
+
+    div.addEventListener("touchend", () => {
+        clearTimeout(longPressTimer);
+    });
+    div.addEventListener("touchmove", () => {
+        clearTimeout(longPressTimer);
+    });
+
+    // Small hover trigger for desktop (subtle ⋯)
+    const hoverTrigger = document.createElement("button");
+    hoverTrigger.className = "reaction-trigger";
+    hoverTrigger.textContent = "⋯";
+    hoverTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const existingBar = document.getElementById("global-reaction-bar");
+        if (existingBar && existingBar.style.visibility === "visible") {
+            closeReactionUI();
+        } else {
+            showReactionBarAt(data.id, div);
+        }
+    });
+    div.appendChild(hoverTrigger);
+
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
+
 socket.on("chat message", (data) => {
     appendMessage(data, chat);
     appendMessage(data, vchatMsgs);
 });
+
+socket.on("message:reactions-update", ({ messageId, reactions }) => {
+    const updateContainer = (container) => {
+        const msg = container.querySelector(`.message[data-id="${messageId}"]`);
+        if (!msg) return;
+        const reactionsDiv = msg.querySelector(".message-reactions");
+        if (!reactionsDiv) return;
+        reactionsDiv.innerHTML = "";
+        Object.entries(reactions).forEach(([emoji, users]) => {
+            const badge = document.createElement("span");
+            badge.className = "reaction-badge";
+            if (users.includes(socket.id)) badge.classList.add("active");
+            badge.textContent = emoji + " " + users.length;
+            reactionsDiv.appendChild(badge);
+        });
+    };
+    updateContainer(chat);
+    updateContainer(vchatMsgs);
+});
+
+// ── Global reaction bar (on body) ────────────────
+function createGlobalBar() {
+    let bar = document.getElementById("global-reaction-bar");
+    if (bar) return bar;
+    bar = document.createElement("div");
+    bar.id = "global-reaction-bar";
+    bar.className = "reaction-bar";
+    REACT_EMOJIS.forEach(emoji => {
+        const opt = document.createElement("span");
+        opt.className = "reaction-opt";
+        opt.textContent = emoji;
+        opt.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const msgId = bar.dataset.messageId;
+            if (msgId) socket.emit("message:react", { messageId: msgId, emoji });
+            closeReactionUI();
+        });
+        bar.appendChild(opt);
+    });
+    const more = document.createElement("span");
+    more.className = "reaction-more";
+    more.textContent = "+";
+    more.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleMoreReactions(bar);
+    });
+    bar.appendChild(more);
+    document.body.appendChild(bar);
+    return bar;
+}
+
+function showReactionBarAt(messageId, messageEl) {
+    closeReactionUI();
+    const bar = createGlobalBar();
+    bar.dataset.messageId = messageId || "";
+    const rect = messageEl.getBoundingClientRect();
+    const chatRect = document.querySelector(".chat-container").getBoundingClientRect();
+    const barW = 180;
+    let left = rect.left;
+    left = Math.max(left, chatRect.left + 4);
+    left = Math.min(left, window.innerWidth - barW - 8);
+    bar.style.left = left + "px";
+    bar.style.right = "auto";
+    bar.style.top = Math.max(chatRect.top + 4, rect.top - 48) + "px";
+    bar.style.position = "fixed";
+    bar.style.transform = "scale(1)";
+    bar.style.visibility = "visible";
+    bar.style.opacity = "1";
+    bar.style.pointerEvents = "auto";
+}
+
+function closeReactionUI() {
+    const bar = document.getElementById("global-reaction-bar");
+    if (bar) {
+        bar.style.visibility = "hidden";
+        bar.style.opacity = "0";
+        bar.style.pointerEvents = "none";
+        bar.style.top = "";
+        bar.style.left = "";
+        bar.style.right = "";
+        bar.dataset.messageId = "";
+    }
+    document.querySelectorAll(".more-reactions-popup").forEach(p => p.remove());
+}
+
+function toggleMoreReactions(bar) {
+    const existing = bar.querySelector(".more-reactions-popup");
+    if (existing) { existing.remove(); return; }
+    document.querySelectorAll(".more-reactions-popup").forEach(p => p.remove());
+    const popup = document.createElement("div");
+    const barRect = bar.getBoundingClientRect();
+    popup.className = "more-reactions-popup" + (barRect.top < 220 ? " below" : "");
+    MORE_REACT_EMOJIS.forEach(emoji => {
+        const opt = document.createElement("span");
+        opt.className = "reaction-opt";
+        opt.textContent = emoji;
+        opt.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const msgId = bar.dataset.messageId;
+            if (msgId) socket.emit("message:react", { messageId: msgId, emoji });
+            closeReactionUI();
+        });
+        popup.appendChild(opt);
+    });
+    bar.appendChild(popup);
+}
 
 // ── Typing ────────────────────────────────────────
 let typingTimeout;
@@ -501,14 +705,22 @@ socket.on("stop typing", ()  => { typingIndicator.textContent = ""; document.get
 
 // ── Users ─────────────────────────────────────────
 let roomUsersMap = {};
-socket.on("users", (userList) => {
-    roomUsersMap = {};
-    userList.forEach(({ id, username: name }) => { roomUsersMap[id] = name; });
+let userStatusMap = {};
+socket.on("user:status-update", ({ socketId, status }) => {
+    userStatusMap[socketId] = status;
+    renderUserList();
+    if (!participantsPanel.classList.contains("hidden")) {
+        updateParticipantsList();
+    }
+});
+
+function renderUserList() {
     if (!usersList) return;
     usersList.innerHTML = "";
-    userList.forEach(({ id, username: name }) => {
+    Object.entries(roomUsersMap).forEach(([id, name]) => {
         const li = document.createElement("li");
-        li.innerHTML = "<span>🟢 " + name + "</span>";
+        const status = userStatusMap[id] || "online";
+        li.innerHTML = "<span>" + statusDot(status) + " " + name + "</span>";
         if (isAdmin && id !== socket.id) {
             const kickBtn = document.createElement("button");
             kickBtn.className = "kick-btn";
@@ -521,6 +733,12 @@ socket.on("users", (userList) => {
         }
         usersList.appendChild(li);
     });
+}
+
+socket.on("users", (userList) => {
+    roomUsersMap = {};
+    userList.forEach(({ id, username: name }) => { roomUsersMap[id] = name; });
+    renderUserList();
     if (!participantsPanel.classList.contains("hidden")) {
         updateParticipantsList();
     }
@@ -554,6 +772,10 @@ document.addEventListener("click", (e) => {
     if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.classList.add("hidden");
     if (!document.getElementById("vemojiPicker").contains(e.target) && e.target !== vemojiBtn) document.getElementById("vemojiPicker").classList.add("hidden");
 });
+document.addEventListener("click", (e) => {
+    if (!e.target.closest(".message") && !e.target.closest("#global-reaction-bar")) closeReactionUI();
+});
+document.getElementById("chat").addEventListener("scroll", closeReactionUI, { passive: true });
 
 // ── GIF Picker (Giphy API) ──────────────────────
 const gifBtn = document.getElementById("gifBtn");
@@ -617,7 +839,7 @@ function searchGiphy(query, resultsEl) {
                     el.decoding = "async";
                 }
                 el.addEventListener("click", () => {
-                    socket.emit("chat message", { user: username.value, msg: "", gif: g.chat });
+                    socket.emit("chat message", { id: generateMessageId(), user: username.value, msg: "", gif: g.chat });
                     gifPicker.classList.add("hidden");
                     vgifPicker.classList.add("hidden");
                 });
@@ -806,26 +1028,36 @@ async function enterPip(videoId, currentTime) {
 
         pipVideo = document.createElement("video");
         pipVideo.src = data.url;
-        pipVideo.currentTime = currentTime;
         pipVideo.muted = false;
         pipVideo.playsInline = true;
-        pipVideo.style.display = "none";
+        pipVideo.crossOrigin = "anonymous";
+        pipVideo.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;pointer-events:none;";
         pipVideo.setAttribute("playsinline", "");
         pipVideo.setAttribute("webkit-playsinline", "");
         document.body.appendChild(pipVideo);
 
+        await new Promise((resolve, reject) => {
+            const onMeta = () => { pipVideo.currentTime = currentTime; resolve(); };
+            pipVideo.addEventListener("loadedmetadata", onMeta, { once: true });
+            pipVideo.addEventListener("error", reject, { once: true });
+            setTimeout(resolve, 5000);
+        });
+
         await pipVideo.play();
         pipLeaveTime = currentTime;
 
+        const pipCheck = () => {
+            if (pipVideo && !pipVideo.paused && !pipActive) {
+                pipVideo.requestPictureInPicture()
+                    .then(() => { pipActive = true; })
+                    .catch((e) => { console.warn("PiP request failed:", e); });
+            }
+        };
+
         if (isPipSupported()) {
-            setTimeout(async () => {
-                if (pipVideo && !pipVideo.paused) {
-                    try {
-                        await pipVideo.requestPictureInPicture();
-                        pipActive = true;
-                    } catch(e) { console.warn("PiP request failed:", e); }
-                }
-            }, 300);
+            setTimeout(pipCheck, 500);
+            setTimeout(pipCheck, 1500);
+            setTimeout(pipCheck, 4000);
         }
     } catch(e) { console.warn("PiP enter error:", e); if (pipVideo) { pipVideo.remove(); pipVideo = null; } }
 }
@@ -1322,15 +1554,16 @@ vform.addEventListener("submit", (e) => {
     const msgText = vinput.value.trim();
     if ((!msgText && !vpendingImage) || !username.value.trim()) return;
 
+    const msgId = generateMessageId();
     if (vpendingImage) {
         uploadImage(vpendingImage).then(url => {
             if (url) {
-                socket.emit("chat message", { user: username.value, msg: msgText, image: url });
+                socket.emit("chat message", { id: msgId, user: username.value, msg: msgText, image: url });
             }
             clearPending("video");
         });
     } else {
-        socket.emit("chat message", { user: username.value, msg: msgText });
+        socket.emit("chat message", { id: msgId, user: username.value, msg: msgText });
     }
     vinput.value = "";
     socket.emit("stop typing");
@@ -1974,7 +2207,8 @@ function updateParticipantsList() {
         const isLocal = id === socket.id;
         const nameSpan = document.createElement("span");
         nameSpan.className = "pp-name";
-        nameSpan.textContent = isLocal ? name + " (You)" : name;
+        const status = userStatusMap[id] || "online";
+        nameSpan.textContent = statusDot(status) + " " + (isLocal ? name + " (You)" : name);
         div.appendChild(nameSpan);
         if (isLocal && handRaised) {
             const badge = document.createElement("span");
