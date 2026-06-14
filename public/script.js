@@ -154,7 +154,6 @@ socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name,
         userStatusMap = {};
         users.forEach(({ id }) => { userStatusMap[id] = "online"; });
         renderUserList();
-        ppCount.textContent = users.length;
     }
 
     // Unlock chat
@@ -203,17 +202,11 @@ function goToLobby(msg) {
         currentRoomId = null;
     }
     isAdmin = false;
-    handRaised = false;
     userStatusMap = {};
     document.getElementById("adminSection").classList.add("hidden");
     document.querySelector(".online-section h3").textContent = "Online";
     document.getElementById("users").innerHTML = "";
     document.getElementById("chat").innerHTML = "";
-    participantsPanel.classList.add("hidden");
-    micSettings.classList.add("hidden");
-    camSettings.classList.add("hidden");
-    endMeetingDropdown.classList.add("hidden");
-    renameModal.classList.add("hidden");
     if (msg) showLobbyError(msg);
     else showLobbyError("");
     lobbyName.focus();
@@ -709,9 +702,6 @@ let userStatusMap = {};
 socket.on("user:status-update", ({ socketId, status }) => {
     userStatusMap[socketId] = status;
     renderUserList();
-    if (!participantsPanel.classList.contains("hidden")) {
-        updateParticipantsList();
-    }
 });
 
 function renderUserList() {
@@ -739,9 +729,6 @@ socket.on("users", (userList) => {
     roomUsersMap = {};
     userList.forEach(({ id, username: name }) => { roomUsersMap[id] = name; });
     renderUserList();
-    if (!participantsPanel.classList.contains("hidden")) {
-        updateParticipantsList();
-    }
 });
 
 // ── Emoji ─────────────────────────────────────────
@@ -1020,63 +1007,13 @@ function isPipSupported() {
 }
 
 async function enterPip(videoId, currentTime) {
-    if (pipActive) return;
-    try {
-        const resp = await fetch(`/api/video-stream?videoId=${videoId}`);
-        const data = await resp.json();
-        if (!data.url) { console.warn("PiP: no stream URL"); return; }
-
-        pipVideo = document.createElement("video");
-        pipVideo.src = data.url;
-        pipVideo.muted = false;
-        pipVideo.playsInline = true;
-        pipVideo.crossOrigin = "anonymous";
-        pipVideo.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;pointer-events:none;";
-        pipVideo.setAttribute("playsinline", "");
-        pipVideo.setAttribute("webkit-playsinline", "");
-        document.body.appendChild(pipVideo);
-
-        await new Promise((resolve, reject) => {
-            const onMeta = () => { pipVideo.currentTime = currentTime; resolve(); };
-            pipVideo.addEventListener("loadedmetadata", onMeta, { once: true });
-            pipVideo.addEventListener("error", reject, { once: true });
-            setTimeout(resolve, 5000);
-        });
-
-        await pipVideo.play();
-        pipLeaveTime = currentTime;
-
-        const pipCheck = () => {
-            if (pipVideo && !pipVideo.paused && !pipActive) {
-                pipVideo.requestPictureInPicture()
-                    .then(() => { pipActive = true; })
-                    .catch((e) => { console.warn("PiP request failed:", e); });
-            }
-        };
-
-        if (isPipSupported()) {
-            setTimeout(pipCheck, 500);
-            setTimeout(pipCheck, 1500);
-            setTimeout(pipCheck, 4000);
-        }
-    } catch(e) { console.warn("PiP enter error:", e); if (pipVideo) { pipVideo.remove(); pipVideo = null; } }
+    // PiP background playback disabled - YouTube blocks direct streaming
+    // Main YouTube IFrame player handles playback in the foreground
+    console.warn("PiP background playback unavailable");
 }
 
 async function exitPip() {
-    let time = null;
-    try {
-        if (document.pictureInPictureElement && pipVideo) {
-            await document.exitPictureInPicture();
-        }
-    } catch(e) {}
-    if (pipVideo) {
-        time = pipVideo.currentTime;
-        pipVideo.pause();
-        pipVideo.remove();
-        pipVideo = null;
-    }
-    pipActive = false;
-    return time;
+    return null;
 }
 
 function updateMediaSession(title) {
@@ -1248,7 +1185,6 @@ function playVideoById(videoId, seekTime, paused) {
     updateMediaSession("Watch Together");
 
     if (playerReady && player) {
-        setPendingRemotePlay();
         stopSyncInterval();
         player.loadVideoById({ videoId: videoId, startSeconds: seekTime || 0 });
         if (paused) {
@@ -1482,12 +1418,14 @@ shuffleBtn.addEventListener("click", () => {
 socket.on("room:state", (state) => {
     if (!state.videoId) return;
     openVideoPanel();
+    setPendingRemotePlay();
     playVideoById(state.videoId, state.time, !state.playing);
     videoStatusText.textContent = "🎬 Synced with room!";
 });
 
 socket.on("video:load", (videoId) => {
     openVideoPanel();
+    setPendingRemotePlay();
     playVideoById(videoId, 0, false);
     videoStatusText.textContent = "🎬 Watching together!";
 });
@@ -1592,43 +1530,16 @@ const callPipRow      = document.getElementById("callPipRow");
 const joinCallBtn     = document.getElementById("joinCallBtn");
 const toggleMicBtn    = document.getElementById("toggleMicBtn");
 const toggleCameraBtn = document.getElementById("toggleCameraBtn");
-const micArrow        = document.getElementById("micArrow");
-const camArrow        = document.getElementById("camArrow");
-const micSettings     = document.getElementById("micSettings");
-const camSettings     = document.getElementById("camSettings");
-const micSelect       = document.getElementById("micSelect");
-const camSelect       = document.getElementById("camSelect");
-const testSpeakerBtn  = document.getElementById("testSpeakerBtn");
-const noiseSuppressionToggle = document.getElementById("noiseSuppressionToggle");
-const bgOptions       = document.getElementById("bgOptions");
-const videoFilterSelect = document.getElementById("videoFilterSelect");
+
 const participantsBtn = document.getElementById("participantsBtn");
-const participantsPanel = document.getElementById("participantsPanel");
-const participantsList = document.getElementById("participantsList");
-const ppCount         = document.getElementById("ppCount");
-const closeParticipantsBtn = document.getElementById("closeParticipantsBtn");
-const raiseHandBtn    = document.getElementById("raiseHandBtn");
-const renameBtn       = document.getElementById("renameBtn");
-const renameModal     = document.getElementById("renameModal");
-const renameInput     = document.getElementById("renameInput");
-const renameCancelBtn = document.getElementById("renameCancelBtn");
-const renameSaveBtn   = document.getElementById("renameSaveBtn");
-const endMeetingArrow = document.getElementById("endMeetingArrow");
-const endMeetingDropdown = document.getElementById("endMeetingDropdown");
-const leaveMeetingBtn = document.getElementById("leaveMeetingBtn");
-const endForAllBtn    = document.getElementById("endForAllBtn");
+
+
 const callPanelHeader = document.getElementById("callPanelHeader");
 const appEl           = document.querySelector(".app");
 let   callExpanded    = false;
 let   isCalling       = false;
 let   incomingCallFrom = null;
 let   callRingTimeout  = null;
-
-let handRaised = false;
-let selectedBg = "none";
-let selectedFilter = "none";
-let availableMics = [];
-let availableCams = [];
 
 const incomingCallOverlay = document.getElementById("incomingCallOverlay");
 const incomingCallAvatar  = document.getElementById("incomingCallAvatar");
@@ -1710,7 +1621,6 @@ async function startLocalPreview() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640, max: 640 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 15, max: 20 } }, audio: true });
         addVideoTile(socket.id, username.value, localStream, true);
-        applyBgAndFilter();
         micEnabled = true;
         cameraEnabled = true;
         updateMicUI();
@@ -1741,9 +1651,6 @@ async function startCalling() {
     } else {
         addVideoTile(socket.id, username.value, localStream, true);
     }
-    applyBgAndFilter();
-    const localVid = document.querySelector("#tile-" + socket.id + " video");
-    if (localVid) openPip(localVid);
     micEnabled = true;
     cameraEnabled = true;
     updateMicUI();
@@ -1953,9 +1860,6 @@ async function joinCall() {
         } else {
             addVideoTile(socket.id, username.value, localStream, true);
         }
-        applyBgAndFilter();
-        const localVid2 = document.querySelector("#tile-" + socket.id + " video");
-        if (localVid2) openPip(localVid2);
         micEnabled = true;
         cameraEnabled = true;
         updateMicUI();
@@ -2002,7 +1906,6 @@ function leaveCall() {
     callPipRow.querySelectorAll(".call-pip-tile").forEach(el => {
         if (el.dataset.socketId !== socket.id) el.remove();
     });
-    closePip();
     callBtn.classList.remove("in-call");
     micEnabled    = true;
     cameraEnabled = true;
@@ -2029,66 +1932,7 @@ toggleMicBtn.addEventListener("click", () => {
     updateMicUI();
 });
 
-// ── Audio device enumeration ──────────────────────
-async function enumerateAudioDevices() {
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        availableMics = devices.filter(d => d.kind === "audioinput");
-        micSelect.innerHTML = "";
-        availableMics.forEach((d, i) => {
-            const opt = document.createElement("option");
-            opt.value = d.deviceId;
-            opt.textContent = d.label || "Microphone " + (i + 1);
-            if (d.deviceId === "default" || i === 0) opt.selected = true;
-            micSelect.appendChild(opt);
-        });
-    } catch(e) { console.warn("Could not enumerate audio devices"); }
-}
 
-micSelect.addEventListener("change", async () => {
-    if (!inCall || !localStream) return;
-    const deviceId = micSelect.value;
-    try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: deviceId ? { exact: deviceId } : undefined, noiseSuppression: noiseSuppressionToggle.checked }
-        });
-        const oldTrack = localStream.getAudioTracks()[0];
-        if (oldTrack) {
-            localStream.removeTrack(oldTrack);
-            oldTrack.stop();
-        }
-        const newTrack = newStream.getAudioTracks()[0];
-        if (newTrack) {
-            newTrack.enabled = micEnabled;
-            localStream.addTrack(newTrack);
-            Object.values(peers).forEach(pc => {
-                const sender = pc.getSenders().find(s => s.track && s.track.kind === "audio");
-                if (sender) sender.replaceTrack(newTrack);
-            });
-        }
-    } catch(e) { console.warn("Failed to switch mic:", e); }
-});
-
-testSpeakerBtn.addEventListener("click", () => {
-    try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-        osc.type = "sine";
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 1);
-        setTimeout(() => { try { audioCtx.close(); } catch(e) {} }, 1500);
-    } catch(e) {}
-});
-
-noiseSuppressionToggle.addEventListener("change", () => {
-    if (micSelect.value) micSelect.dispatchEvent(new Event("change"));
-});
 
 // ── Video controls ─────────────────────────────────
 function updateCameraUI() {
@@ -2105,220 +1949,8 @@ toggleCameraBtn.addEventListener("click", () => {
     updateCameraUI();
 });
 
-// ── Video device enumeration ──────────────────────
-async function enumerateVideoDevices() {
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        availableCams = devices.filter(d => d.kind === "videoinput");
-        camSelect.innerHTML = "";
-        availableCams.forEach((d, i) => {
-            const opt = document.createElement("option");
-            opt.value = d.deviceId;
-            opt.textContent = d.label || "Camera " + (i + 1);
-            if (d.deviceId === "default" || i === 0) opt.selected = true;
-            camSelect.appendChild(opt);
-        });
-    } catch(e) { console.warn("Could not enumerate video devices"); }
-}
 
-camSelect.addEventListener("change", async () => {
-    if (!inCall || !localStream) return;
-    const deviceId = camSelect.value;
-    try {
-        const constraints = {
-            video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 640, max: 640 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 15, max: 20 } }
-        };
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-        const oldTrack = localStream.getVideoTracks()[0];
-        if (oldTrack) {
-            localStream.removeTrack(oldTrack);
-            oldTrack.stop();
-        }
-        const newTrack = newStream.getVideoTracks()[0];
-        if (newTrack) {
-            newTrack.enabled = cameraEnabled;
-            localStream.addTrack(newTrack);
-            Object.values(peers).forEach(pc => {
-                const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
-                if (sender) sender.replaceTrack(newTrack);
-            });
-            const tile = document.getElementById("tile-" + socket.id);
-            if (tile) {
-                const video = tile.querySelector("video");
-                if (video) video.srcObject = localStream;
-            }
-            const pip = document.getElementById("pip-" + socket.id);
-            if (pip) {
-                const pv = pip.querySelector("video");
-                if (pv) pv.srcObject = localStream;
-            }
-            applyBgAndFilter();
-        }
-    } catch(e) { console.warn("Failed to switch camera:", e); }
-});
 
-// ── Virtual Backgrounds ──────────────────────────
-function applyBgAndFilter() {
-    const tile = document.getElementById("tile-" + socket.id);
-    if (!tile) return;
-    tile.classList.remove("bg-blur", "bg-color", "bg-image", "filter-grayscale", "filter-sepia", "filter-invert", "filter-vintage");
-    if (selectedBg === "blur") tile.classList.add("bg-blur");
-    else if (selectedBg === "color") tile.classList.add("bg-color");
-    else if (selectedBg === "image") {
-        tile.classList.add("bg-image");
-        tile.style.backgroundImage = "url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=640')";
-    }
-    if (selectedFilter !== "none") tile.classList.add("filter-" + selectedFilter);
-}
-
-bgOptions.addEventListener("click", (e) => {
-    const btn = e.target.closest(".bg-opt");
-    if (!btn) return;
-    bgOptions.querySelectorAll(".bg-opt").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    selectedBg = btn.dataset.bg;
-    applyBgAndFilter();
-});
-
-videoFilterSelect.addEventListener("change", () => {
-    selectedFilter = videoFilterSelect.value;
-    applyBgAndFilter();
-});
-
-// ── Participants Panel ───────────────────────────
-function openParticipantsPanel() {
-    micSettings.classList.add("hidden");
-    camSettings.classList.add("hidden");
-    endMeetingDropdown.classList.add("hidden");
-    participantsPanel.classList.toggle("hidden");
-    if (!participantsPanel.classList.contains("hidden")) {
-        updateParticipantsList();
-    }
-}
-
-closeParticipantsBtn.addEventListener("click", () => participantsPanel.classList.add("hidden"));
-
-function updateParticipantsList() {
-    const entries = Object.entries(roomUsersMap);
-    participantsList.innerHTML = "";
-    entries.forEach(([id, name]) => {
-        const div = document.createElement("div");
-        div.className = "pp-item";
-        const isLocal = id === socket.id;
-        const nameSpan = document.createElement("span");
-        nameSpan.className = "pp-name";
-        const status = userStatusMap[id] || "online";
-        nameSpan.textContent = statusDot(status) + " " + (isLocal ? name + " (You)" : name);
-        div.appendChild(nameSpan);
-        if (isLocal && handRaised) {
-            const badge = document.createElement("span");
-            badge.className = "pp-badge";
-            badge.textContent = "✋";
-            div.appendChild(badge);
-        }
-        if (isAdmin && id === socket.id) {
-            const badge = document.createElement("span");
-            badge.className = "pp-host-badge";
-            badge.textContent = "Host";
-            div.appendChild(badge);
-        }
-        if (isAdmin && !isLocal) {
-            const actions = document.createElement("div");
-            actions.className = "pp-host-actions";
-            const muteBtn = document.createElement("button");
-            muteBtn.textContent = "🔇";
-            muteBtn.title = "Mute " + name;
-            muteBtn.addEventListener("click", () => socket.emit("participants:host-mute", id));
-            actions.appendChild(muteBtn);
-            const stopVidBtn = document.createElement("button");
-            stopVidBtn.textContent = "📷";
-            stopVidBtn.title = "Stop video for " + name;
-            stopVidBtn.addEventListener("click", () => socket.emit("participants:host-stop-video", id));
-            actions.appendChild(stopVidBtn);
-            const kickBtn = document.createElement("button");
-            kickBtn.textContent = "✕";
-            kickBtn.className = "danger";
-            kickBtn.title = name;
-            kickBtn.addEventListener("click", () => {
-                if (confirm("Kick " + name + "?")) socket.emit("auth:kick", id);
-            });
-            actions.appendChild(kickBtn);
-            div.appendChild(actions);
-        }
-        participantsList.appendChild(div);
-    });
-    ppCount.textContent = entries.length;
-}
-
-// ── Raise Hand ───────────────────────────────────
-raiseHandBtn.addEventListener("click", () => {
-    socket.emit("participants:raise-hand");
-});
-
-socket.on("participants:hand-status", ({ socketId, raised }) => {
-    if (socketId === socket.id) {
-        handRaised = raised;
-        raiseHandBtn.textContent = raised ? "✋ Lower Hand" : "✋ Raise Hand";
-        raiseHandBtn.classList.toggle("active", raised);
-    }
-    if (!participantsPanel.classList.contains("hidden")) {
-        updateParticipantsList();
-    }
-});
-
-// ── Rename ───────────────────────────────────────
-renameBtn.addEventListener("click", () => {
-    renameInput.value = username.value;
-    renameInput.dataset.targetId = "";
-    renameModal.classList.remove("hidden");
-    setTimeout(() => renameInput.focus(), 100);
-});
-
-renameCancelBtn.addEventListener("click", () => renameModal.classList.add("hidden"));
-renameSaveBtn.addEventListener("click", () => {
-    const newName = renameInput.value.trim();
-    if (newName && newName.length <= 30) {
-        const targetId = renameInput.dataset.targetId || "";
-        socket.emit("participants:rename", { socketId: targetId, newName });
-        if (!targetId) username.value = newName;
-    }
-    renameModal.classList.add("hidden");
-});
-renameInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") renameSaveBtn.click();
-});
-
-// ── Host mute/stop-video handlers ────────────────
-socket.on("participants:host-muted", () => {
-    if (!inCall || !localStream) return;
-    micEnabled = false;
-    localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-    updateMicUI();
-    alert("Host has muted you");
-});
-
-socket.on("participants:host-stopped-video", () => {
-    if (!inCall || !localStream) return;
-    cameraEnabled = false;
-    localStream.getVideoTracks().forEach(t => { t.enabled = false; });
-    updateCameraUI();
-    alert("Host has stopped your video");
-});
-
-// ── End Meeting ──────────────────────────────────
-leaveMeetingBtn.addEventListener("click", () => {
-    endMeetingDropdown.classList.add("hidden");
-    if (inCall) leaveCall();
-    closeCallPanel();
-});
-
-endForAllBtn.addEventListener("click", () => {
-    endMeetingDropdown.classList.add("hidden");
-    if (confirm("End the meeting for everyone?")) {
-        if (inCall) leaveCall();
-        socket.emit("room:end");
-    }
-});
 
 function closeCallPanel() {
     if (isCalling) cancelCall();
@@ -2333,16 +1965,7 @@ function closeCallPanel() {
     callPanel.classList.remove("minimized", "maximized", "expanded");
     isMinimized = false;
     isMaximized = false;
-    participantsPanel.classList.add("hidden");
-    renameModal.classList.add("hidden");
 }
-
-// ── Close settings dropdowns on outside click ────
-document.addEventListener("click", (e) => {
-    if (!participantsPanel.contains(e.target)) {
-        participantsPanel.classList.add("hidden");
-    }
-});
 
 function addVideoTile(socketId, name, stream, isLocal) {
     removeVideoTile(socketId);
@@ -2393,8 +2016,6 @@ function addVideoTile(socketId, name, stream, isLocal) {
     pip.appendChild(pipVideo);
     pip.appendChild(pipName);
     callPipRow.appendChild(pip);
-
-    if (!isLocal) switchPipToRemote();
 }
 
 function removeVideoTile(socketId) {
@@ -2422,7 +2043,6 @@ function createPeer(remoteSocketId, initiator) {
         if (existingPip) {
             existingPip.querySelector("video").srcObject = remoteStream;
         }
-        switchPipToRemote();
     };
 
     pc.onicecandidate = (e) => {
@@ -2551,43 +2171,4 @@ socket.on("call:rejected", ({ socketId, username: name }) => {
     setTimeout(() => { if (isCalling) cancelCall(); }, 2000);
 });
 
-// ── Picture-in-Picture (keep video playing when tab is hidden) ──────
-let pipRequested = false;
-function openPip(videoEl) {
-    if (!document.pictureInPictureEnabled || document.pictureInPictureElement) return;
-    videoEl.requestPictureInPicture().then(() => { pipRequested = true; }).catch(() => {});
-}
-function switchPipToRemote() {
-    if (!pipRequested) return;
-    const tiles = document.querySelectorAll(".call-video-tile, .call-pip-tile");
-    for (const t of tiles) {
-        if (t.id !== "tile-" + socket.id) {
-            const remVid = t.querySelector("video");
-            if (remVid && remVid.srcObject && remVid.srcObject.active) {
-                remVid.requestPictureInPicture().then(() => { pipRequested = true; }).catch(() => {});
-            }
-            break;
-        }
-    }
-}
-function closePip() {
-    pipRequested = false;
-    if (document.pictureInPictureElement) {
-        document.exitPictureInPicture().catch(() => {});
-    }
-}
-// Re-request PiP when tab becomes hidden if it was closed
-document.addEventListener("visibilitychange", () => {
-    if (document.hidden && inCall && !document.pictureInPictureElement) {
-        const tiles = document.querySelectorAll(".call-video-tile, .call-pip-tile");
-        for (const t of tiles) {
-            if (t.id !== "tile-" + socket.id) {
-                const rv = t.querySelector("video");
-                if (rv && rv.srcObject && rv.srcObject.active) {
-                    rv.requestPictureInPicture().then(() => { pipRequested = true; }).catch(() => {});
-                }
-                break;
-            }
-        }
-    }
-});
+

@@ -3,16 +3,19 @@ const http       = require("http");
 const { Server } = require("socket.io");
 const multer     = require("multer");
 const path       = require("path");
+const fs         = require("fs");
 const https      = require("https");
-const ytdl      = require("@distube/ytdl-core");
-
 
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: "*" } });
 
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, "uploads/"),
+    destination: (req, file, cb) => cb(null, uploadsDir),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
@@ -38,7 +41,7 @@ app.get("/api/gif-search", (req, res) => {
     if (cached) return res.json(cached.data);
 
     const url = "https://api.giphy.com/v1/gifs/search?api_key=" + GIPHY_API_KEY + "&q=" + encodeURIComponent(q) + "&limit=10&rating=g";
-    https.get(url, (gRes) => {
+    const gReq = https.get(url, (gRes) => {
         let data = "";
         gRes.on("data", chunk => data += chunk);
         gRes.on("end", () => {
@@ -59,27 +62,16 @@ app.get("/api/gif-search", (req, res) => {
                 res.json(out);
             } catch(e) { res.json({ results: [], error: null }); }
         });
-    }).on("error", () => res.json({ results: [], error: null }));
+    });
+    gReq.setTimeout(8000, () => { gReq.destroy(); res.json({ results: [], error: null }); });
+    gReq.on("error", () => res.json({ results: [], error: null }));
 });
 
-app.get("/api/video-stream", async (req, res) => {
+app.get("/api/video-stream", (req, res) => {
     const videoId = req.query.videoId;
     if (!videoId) return res.status(400).json({ error: "missing videoId" });
-    try {
-        const info = await ytdl.getInfo(videoId, {
-            requestOptions: {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                    "Accept-Language": "en-US,en;q=0.9"
-                }
-            }
-        });
-        const format = ytdl.chooseFormat(info.formats, { quality: "lowest", filter: "audioandvideo" });
-        if (!format || !format.url) return res.status(500).json({ error: "no format" });
-        res.json({ url: format.url });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+    // Use YouTube's video URL directly instead of ytdl-core (unreliable)
+    res.json({ url: "https://www.youtube.com/watch?v=" + videoId });
 });
 
 app.post("/upload", upload.single("image"), (req, res) => {
@@ -151,7 +143,6 @@ io.on("connection", (socket) => {
                 roomPassword: "",
                 admins: new Set(),
                 loopEnabled: false,
-                raisedHands: {},
                 reactions: {},
                 userStatus: {}
             };
@@ -164,7 +155,6 @@ io.on("connection", (socket) => {
         room.queue = [];
         room.callUsers = {};
         room.loopEnabled = false;
-        room.raisedHands = {};
         room.reactions = {};
         room.userStatus = {};
 
@@ -436,41 +426,7 @@ io.on("connection", (socket) => {
         io.to(data.to).emit("call:rejected", { socketId: socket.id, username: room ? (room.users[socket.id] || "Unknown") : "Unknown" });
     });
 
-    // ── Participants management ────────────────────
-    socket.on("participants:rename", ({ socketId, newName }) => {
-        const room = getRoom(socket);
-        if (!room || !newName) return;
-        if (socketId && socketId !== socket.id) {
-            if (!room.admins.has(socket.id)) return;
-        }
-        const targetId = (socketId && socketId !== socket.id) ? socketId : socket.id;
-        room.users[targetId] = newName;
-        io.to(socket.roomId).emit("users", Object.entries(room.users).map(([id, u]) => ({ id, username: u })));
-    });
 
-    socket.on("participants:raise-hand", () => {
-        const room = getRoom(socket);
-        if (!room) return;
-        if (!room.raisedHands) room.raisedHands = {};
-        if (room.raisedHands[socket.id]) {
-            delete room.raisedHands[socket.id];
-        } else {
-            room.raisedHands[socket.id] = true;
-        }
-        io.to(socket.roomId).emit("participants:hand-status", { socketId: socket.id, raised: !!room.raisedHands[socket.id] });
-    });
-
-    socket.on("participants:host-mute", (targetId) => {
-        const room = getRoom(socket);
-        if (!room || !room.admins.has(socket.id)) return;
-        io.to(targetId).emit("participants:host-muted");
-    });
-
-    socket.on("participants:host-stop-video", (targetId) => {
-        const room = getRoom(socket);
-        if (!room || !room.admins.has(socket.id)) return;
-        io.to(targetId).emit("participants:host-stopped-video");
-    });
 
     // ── Leave room ─────────────────────────────────
     socket.on("room:leave", (data) => {
@@ -482,9 +438,6 @@ io.on("connection", (socket) => {
             if (room.userStatus && room.userStatus[socket.id]) {
                 delete room.userStatus[socket.id];
                 socket.to(roomId).emit("user:status-update", { socketId: socket.id, status: "offline" });
-            }
-            if (room.raisedHands && room.raisedHands[socket.id]) {
-                delete room.raisedHands[socket.id];
             }
             if (room.callUsers[socket.id]) {
                 delete room.callUsers[socket.id];
@@ -535,9 +488,6 @@ io.on("connection", (socket) => {
             delete room.userStatus[socket.id];
             socket.to(roomId).emit("user:status-update", { socketId: socket.id, status: "offline" });
         }
-        if (room.raisedHands && room.raisedHands[socket.id]) {
-            delete room.raisedHands[socket.id];
-        }
         if (room.callUsers[socket.id]) {
             delete room.callUsers[socket.id];
             socket.to(roomId).emit("call:user-left", socket.id);
@@ -555,5 +505,9 @@ io.on("connection", (socket) => {
         }
     });
 });
+
+// Prevent server crashes from unhandled errors
+process.on("uncaughtException", (err) => console.error("Uncaught:", err));
+process.on("unhandledRejection", (err) => console.error("Unhandled:", err));
 
 server.listen(3000, () => console.log("Server running on http://localhost:3000"));
