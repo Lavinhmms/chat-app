@@ -1955,7 +1955,7 @@ socket.on("hyperbeam:ended", () => {
 socket.on("hyperbeam:error", (msg) => {
     const isRateLimit = msg && msg.toLowerCase().includes("rate-limited");
     hyperbeamStatusText.textContent = isRateLimit
-        ? "⚠️ Co-browsing API rate-limited — set your own HB_API_KEY env var"
+        ? "⚠️ Co-browsing API rate-limited — try again later or get a new key at hyperbeam.com"
         : "⚠️ " + msg;
     if (!hyperbeamSessionActive) {
         startHyperbeamBtn.textContent = "▷ Start";
