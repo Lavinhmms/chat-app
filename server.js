@@ -24,7 +24,7 @@ app.use(express.static("public"));
 app.use("/uploads", express.static("uploads"));
 
 const GIPHY_API_KEY = process.env.GIPHY_KEY || "7ts8YUGRxPmmILiPdopADIpMekHL2Y4S";
-const HB_API_KEY = process.env.HB_API_KEY || "REPLACED";
+const HB_API_KEY = process.env.HB_API_KEY;
 const gifCache = new Map();
 setInterval(() => {
     const now = Date.now();
