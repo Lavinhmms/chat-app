@@ -190,6 +190,7 @@ function goToLobby(msg) {
     stopRingtone();
     incomingCallOverlay.classList.add("hidden");
     closeVideoPanel();
+    closeHyperbeamPanel();
     callPanel.classList.add("hidden");
     app.classList.add("hidden");
     lobby.classList.remove("hidden");
@@ -336,6 +337,7 @@ document.getElementById("endRoomBtn").addEventListener("click", () => {
 const typingIndicator = document.getElementById("typingIndicator");
 const emojiBtn      = document.getElementById("emojiBtn");
 const emojiPicker   = document.getElementById("emojiPicker");
+const backBtn       = document.getElementById("backBtn");
 const exploreBtn    = document.getElementById("exploreBtn");
 const videoPanel    = document.getElementById("videoPanel");
 const videoInput    = document.getElementById("videoInput");
@@ -418,8 +420,8 @@ function statusDot(status) {
 // ── Sidebar ───────────────────────────────────────
 function openSidebar()  { sidebar.classList.add("open");    sidebarOverlay.classList.add("visible"); }
 function closeSidebar() { sidebar.classList.remove("open"); sidebarOverlay.classList.remove("visible"); }
-hamburger.addEventListener("click", () => sidebar.classList.contains("open") ? closeSidebar() : openSidebar());
-sidebarOverlay.addEventListener("click", closeSidebar);
+    if (hamburger) hamburger.addEventListener("click", () => sidebar.classList.contains("open") ? closeSidebar() : openSidebar());
+    sidebarOverlay.addEventListener("click", closeSidebar);
 
 // ── Sound ─────────────────────────────────────────
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -577,6 +579,7 @@ function appendMessage(data, container) {
 socket.on("chat message", (data) => {
     appendMessage(data, chat);
     appendMessage(data, vchatMsgs);
+    appendMessage(data, hchatMsgs);
 });
 
 socket.on("message:reactions-update", ({ messageId, reactions }) => {
@@ -596,6 +599,7 @@ socket.on("message:reactions-update", ({ messageId, reactions }) => {
     };
     updateContainer(chat);
     updateContainer(vchatMsgs);
+    updateContainer(hchatMsgs);
 });
 
 // ── Global reaction bar (on body) ────────────────
@@ -693,8 +697,8 @@ input.addEventListener("input", () => {
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
 });
-socket.on("typing",      (u) => { typingIndicator.textContent = u + " is typing..."; document.getElementById("vchatTyping").textContent = u + " is typing..."; });
-socket.on("stop typing", ()  => { typingIndicator.textContent = ""; document.getElementById("vchatTyping").textContent = ""; });
+socket.on("typing",      (u) => { typingIndicator.textContent = u + " is typing..."; document.getElementById("vchatTyping").textContent = u + " is typing..."; document.getElementById("hchatTyping").textContent = u + " is typing..."; });
+socket.on("stop typing", ()  => { typingIndicator.textContent = ""; document.getElementById("vchatTyping").textContent = ""; document.getElementById("hchatTyping").textContent = ""; });
 
 // ── Users ─────────────────────────────────────────
 let roomUsersMap = {};
@@ -740,6 +744,7 @@ const emojis = ["😀","😂","😍","😎","😭","😡","🥺","😏","🤔","
                  "🍕","🍔","🍩","🍦","🎂","🍣","🍜","🍎","🍓","🍉"];
 const grid = emojiPicker.querySelector(".emoji-grid");
 const vgrid = document.querySelector("#vemojiPicker .emoji-grid");
+const hgrid = document.querySelector("#hemojiPicker .emoji-grid");
 emojis.forEach(emoji => {
     const span = document.createElement("span");
     span.textContent = emoji;
@@ -753,11 +758,20 @@ emojis.forEach(emoji => {
         else { input.value += emoji; input.focus(); }
     });
     vgrid.appendChild(vspan);
+    const hspan = document.createElement("span");
+    hspan.textContent = emoji;
+    hspan.addEventListener("click", () => {
+        const activeInput = document.activeElement;
+        if (activeInput === hinput) { hinput.value += emoji; hinput.focus(); }
+        else { input.value += emoji; input.focus(); }
+    });
+    hgrid.appendChild(hspan);
 });
 emojiBtn.addEventListener("click", (e) => { e.stopPropagation(); emojiPicker.classList.toggle("hidden"); });
 document.addEventListener("click", (e) => {
     if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.classList.add("hidden");
     if (!document.getElementById("vemojiPicker").contains(e.target) && e.target !== vemojiBtn) document.getElementById("vemojiPicker").classList.add("hidden");
+    if (!hemojiPicker.contains(e.target) && e.target !== hemojiBtn) hemojiPicker.classList.add("hidden");
 });
 document.addEventListener("click", (e) => {
     if (!e.target.closest(".message") && !e.target.closest("#global-reaction-bar")) closeReactionUI();
@@ -872,6 +886,7 @@ vcloseGifPicker.addEventListener("click", () => vgifPicker.classList.add("hidden
 document.addEventListener("click", (e) => {
     if (!gifPicker.contains(e.target) && e.target !== gifBtn) gifPicker.classList.add("hidden");
     if (!vgifPicker.contains(e.target) && e.target !== vgifBtn) vgifPicker.classList.add("hidden");
+    if (!hgifPicker.contains(e.target) && e.target !== hgifBtn) hgifPicker.classList.add("hidden");
 });
 
 // ── Image Upload ──────────────────────────────────
@@ -916,12 +931,18 @@ function clearPending(which) {
         attachPreviewImg.src = "";
         imageBtn.textContent = "📷";
         imageBtn.style.background = "";
-    } else {
+    } else if (which === "video") {
         vpendingImage = null;
         vattachPreview.classList.add("hidden");
         vattachPreviewImg.src = "";
         vimageBtn.textContent = "📷";
         vimageBtn.style.background = "";
+    } else {
+        hpendingImage = null;
+        hattachPreview.classList.add("hidden");
+        hattachPreviewImg.src = "";
+        himageBtn.textContent = "📷";
+        himageBtn.style.background = "";
     }
 }
 
@@ -952,9 +973,13 @@ vattachPreviewRemove.addEventListener("click", () => clearPending("video"));
 // ── Paste & Drop image support ──────────────────
 function handleImageFile(file, target) {
     const isV = target === vinput || target.closest("#vform");
+    const isH = target === hinput || target.closest("#hform");
     if (isV) {
         vpendingImage = file;
         showPreview(file, vattachPreview, vattachPreviewImg, vimageBtn);
+    } else if (isH) {
+        hpendingImage = file;
+        showPreview(file, hattachPreview, hattachPreviewImg, himageBtn);
     } else {
         pendingImage = file;
         showPreview(file, attachPreview, attachPreviewImg, imageBtn);
@@ -963,7 +988,7 @@ function handleImageFile(file, target) {
 
 document.addEventListener("paste", (e) => {
     const target = e.target;
-    if (target !== input && target !== vinput) return;
+    if (target !== input && target !== vinput && target !== hinput) return;
     const items = e.clipboardData.items;
     for (const item of items) {
         if (item.type.startsWith("image/")) {
@@ -1237,8 +1262,10 @@ function extractVideoId(url) {
 }
 
 function openVideoPanel() {
+    closeHyperbeamPanel();
     videoPanel.classList.remove("hidden");
     contentArea.classList.add("video-open");
+    backBtn.classList.remove("hidden");
     if (inCall) callPanel.classList.add("hidden");
 }
 function closeVideoPanel() {
@@ -1247,6 +1274,7 @@ function closeVideoPanel() {
     searchResults.classList.add("hidden");
     hideBlockedMessage();
     if (inCall) callPanel.classList.remove("hidden");
+    updateBackBtn();
 }
 
 function loadVideo(videoId, title) {
@@ -1521,6 +1549,136 @@ vemojiBtn.addEventListener("click", (e) => {
 });
 
 // ════════════════════════════════════════════════════
+// HYPERBEAM PANEL CHAT
+// ════════════════════════════════════════════════════
+
+const hform = document.getElementById("hform");
+const hinput = document.getElementById("hinput");
+const hchatMsgs = document.getElementById("hchatMsgs");
+const hemojiBtn = document.getElementById("hemojiBtn");
+
+hform.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const msgText = hinput.value.trim();
+    if ((!msgText && !hpendingImage) || !username.value.trim()) return;
+
+    const msgId = generateMessageId();
+    if (hpendingImage) {
+        uploadImage(hpendingImage).then(url => {
+            if (url) {
+                socket.emit("chat message", { id: msgId, user: username.value, msg: msgText, image: url });
+            }
+            clearPending("hyperbeam");
+        });
+    } else {
+        socket.emit("chat message", { id: msgId, user: username.value, msg: msgText });
+    }
+    hinput.value = "";
+    socket.emit("stop typing");
+});
+
+hinput.addEventListener("input", () => {
+    if (!username.value) return;
+    socket.emit("typing", username.value);
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => socket.emit("stop typing"), 1500);
+});
+
+const hemojiPicker = document.getElementById("hemojiPicker");
+hemojiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hemojiPicker.classList.toggle("hidden");
+});
+
+// ── Hyperbeam GIF Picker ──
+const hgifBtn = document.getElementById("hgifBtn");
+const hgifPicker = document.getElementById("hgifPicker");
+const hgifSearch = document.getElementById("hgifSearch");
+const hgifResults = document.getElementById("hgifResults");
+const hcloseGifPicker = document.getElementById("hcloseGifPicker");
+
+hgifBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleGifPicker(hgifPicker, hgifSearch, hgifResults);
+});
+hgifSearch.addEventListener("input", () => {
+    clearTimeout(gifSearchTimer);
+    const val = hgifSearch.value.trim();
+    if (!val) { hgifResults.innerHTML = '<div class="gif-loading">Search GIFs...</div>'; return; }
+    gifSearchTimer = setTimeout(() => searchGiphy(val, hgifResults), 200);
+});
+hgifSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") searchGiphy(hgifSearch.value.trim(), hgifResults);
+});
+hcloseGifPicker.addEventListener("click", () => hgifPicker.classList.add("hidden"));
+
+// ── Hyperbeam Image Upload ──
+const himageBtn = document.getElementById("himageBtn");
+const himageInput = document.getElementById("himageInput");
+const hattachPreview = document.getElementById("hattachPreview");
+const hattachPreviewImg = document.getElementById("hattachPreviewImg");
+const hattachPreviewRemove = document.getElementById("hattachPreviewRemove");
+let hpendingImage = null;
+
+himageBtn.addEventListener("click", () => {
+    if (hpendingImage) { clearPending("hyperbeam"); return; }
+    himageInput.click();
+});
+himageInput.addEventListener("change", () => {
+    if (himageInput.files[0]) {
+        hpendingImage = himageInput.files[0];
+        showPreview(himageInput.files[0], hattachPreview, hattachPreviewImg, himageBtn);
+    }
+});
+hattachPreviewRemove.addEventListener("click", () => clearPending("hyperbeam"));
+
+// ── Hyperbeam bottom resize ──
+const hbottomResize = document.getElementById("hbottomResize");
+const hyperbeamBottom = document.getElementById("hyperbeamBottom");
+let hisResizing = false;
+
+function hResizeStart(e) {
+    hisResizing = true;
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", hOnResize);
+    document.addEventListener("mouseup", hStopResize);
+    document.addEventListener("touchmove", hOnResizeTouch, { passive: false });
+    document.addEventListener("touchend", hStopResize);
+    document.addEventListener("touchcancel", hStopResize);
+}
+hbottomResize.addEventListener("mousedown", hResizeStart);
+hbottomResize.addEventListener("touchstart", hResizeStart, { passive: true });
+
+function hGetResizeY(e) {
+    return e.touches ? e.touches[0].clientY : e.clientY;
+}
+
+function hOnResize(e) {
+    if (!hisResizing) return;
+    const panelRect = hyperbeamBottom.parentElement.getBoundingClientRect();
+    const newHeight = panelRect.bottom - hGetResizeY(e);
+    const clamped = Math.max(60, Math.min(newHeight, window.innerHeight * 0.6));
+    hyperbeamBottom.style.height = clamped + "px";
+}
+
+function hOnResizeTouch(e) {
+    if (e.cancelable) e.preventDefault();
+    hOnResize(e);
+}
+
+function hStopResize() {
+    hisResizing = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    document.removeEventListener("mousemove", hOnResize);
+    document.removeEventListener("mouseup", hStopResize);
+    document.removeEventListener("touchmove", hOnResizeTouch);
+    document.removeEventListener("touchend", hStopResize);
+    document.removeEventListener("touchcancel", hStopResize);
+}
+
+// ════════════════════════════════════════════════════
 // GROUP VIDEO CALL — WebRTC Mesh + Picture-in-Picture
 // ════════════════════════════════════════════════════
 
@@ -1694,8 +1852,117 @@ function cancelCall() {
 
 exploreBtn.addEventListener("click", () => {
     topMenuDropdown.classList.add("hidden");
+    closeHyperbeamPanel();
     videoPanel.classList.contains("hidden") ? openVideoPanel() : closeVideoPanel();
 });
+
+backBtn.addEventListener("click", () => {
+    closeVideoPanel();
+    closeHyperbeamPanel();
+});
+
+// ════════════════════════════════════════════════════
+// HYPERBEAM CO-BROWSING
+// ════════════════════════════════════════════════════
+
+const hyperbeamBtn = document.getElementById("hyperbeamBtn");
+const hyperbeamPanel = document.getElementById("hyperbeamPanel");
+const hyperbeamContainer = document.getElementById("hyperbeamContainer");
+const hyperbeamEmpty = document.getElementById("hyperbeamEmpty");
+const startHyperbeamBtn = document.getElementById("startHyperbeamBtn");
+const hyperbeamUrlInput = document.getElementById("hyperbeamUrlInput");
+const hyperbeamGoBtn = document.getElementById("hyperbeamGoBtn");
+const hyperbeamStatusText = document.getElementById("hyperbeamStatusText");
+const hyperbeamWrapper = document.getElementById("hyperbeamWrapper");
+const hyperbeamToolbar = document.getElementById("hyperbeamToolbar");
+
+let hyperbeamSessionActive = false;
+let hyperbeamIframe = null;
+
+function openHyperbeamPanel() {
+    closeVideoPanel();
+    hyperbeamPanel.classList.remove("hidden");
+    contentArea.classList.add("hyperbeam-open");
+    backBtn.classList.remove("hidden");
+    if (inCall) callPanel.classList.add("hidden");
+}
+
+function closeHyperbeamPanel() {
+    hyperbeamPanel.classList.add("hidden");
+    contentArea.classList.remove("hyperbeam-open");
+    if (inCall) callPanel.classList.remove("hidden");
+    updateBackBtn();
+}
+
+function updateBackBtn() {
+    const bothHidden = videoPanel.classList.contains("hidden") && hyperbeamPanel.classList.contains("hidden");
+    backBtn.classList.toggle("hidden", bothHidden);
+}
+
+hyperbeamBtn.addEventListener("click", () => {
+    topMenuDropdown.classList.add("hidden");
+    closeVideoPanel();
+    if (hyperbeamPanel.classList.contains("hidden")) {
+        openHyperbeamPanel();
+        if (!hyperbeamSessionActive) {
+            socket.emit("hyperbeam:get-session");
+        }
+    } else {
+        closeHyperbeamPanel();
+    }
+});
+
+startHyperbeamBtn.addEventListener("click", () => {
+    if (hyperbeamSessionActive) {
+        if (confirm("End the co-browsing session for everyone?")) {
+            socket.emit("hyperbeam:stop");
+        }
+    } else {
+        socket.emit("hyperbeam:start");
+        hyperbeamStatusText.textContent = "⏳ Starting session...";
+    }
+});
+
+// Socket events
+socket.on("hyperbeam:session", ({ embedUrl }) => {
+    hyperbeamSessionActive = true;
+    hyperbeamEmpty.classList.add("hidden");
+    hyperbeamContainer.classList.remove("hidden");
+    startHyperbeamBtn.textContent = "⏹ End";
+    startHyperbeamBtn.className = "hb-btn hb-stop";
+    hyperbeamStatusText.textContent = "✅ Co-browsing session active";
+
+    hyperbeamContainer.innerHTML = "";
+    hyperbeamIframe = document.createElement("iframe");
+    hyperbeamIframe.src = embedUrl;
+    hyperbeamIframe.allow = "camera; microphone; fullscreen; autoplay";
+    hyperbeamIframe.sandbox = "allow-same-origin allow-scripts allow-forms allow-popups allow-modals";
+    hyperbeamContainer.appendChild(hyperbeamIframe);
+});
+
+socket.on("hyperbeam:ended", () => {
+    hyperbeamSessionActive = false;
+    hyperbeamEmpty.classList.remove("hidden");
+    hyperbeamContainer.classList.add("hidden");
+    hyperbeamContainer.innerHTML = "";
+    hyperbeamIframe = null;
+    startHyperbeamBtn.textContent = "▷ Start";
+    startHyperbeamBtn.className = "hb-btn hb-start";
+    hyperbeamStatusText.textContent = "⏹ Session ended";
+    hyperbeamUrlInput.value = "";
+});
+
+socket.on("hyperbeam:error", (msg) => {
+    const isRateLimit = msg && msg.toLowerCase().includes("rate-limited");
+    hyperbeamStatusText.textContent = isRateLimit
+        ? "⚠️ Co-browsing API rate-limited — set your own HB_API_KEY env var"
+        : "⚠️ " + msg;
+    if (!hyperbeamSessionActive) {
+        startHyperbeamBtn.textContent = "▷ Start";
+        startHyperbeamBtn.className = "hb-btn hb-start";
+    }
+});
+
 
 acceptCallBtn.addEventListener("click", () => {
     if (!incomingCallFrom) return;

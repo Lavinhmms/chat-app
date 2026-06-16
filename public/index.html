@@ -75,13 +75,17 @@
 
         <!-- Top Bar -->
         <div class="top-bar">
-            <button class="hamburger" id="hamburger" aria-label="Open menu">☰</button>
-            <div class="chat-header"><h2 id="roomTitle">Huba Hmmss</h2></div>
+            <div class="chat-header">
+                <button id="hamburger" class="hamburger" title="Menu">☰</button>
+                <button id="backBtn" class="back-btn hidden" title="Back to chat">←</button>
+                <h2 id="roomTitle">Huba Hmmss</h2>
+            </div>
             <!-- Top right menu -->
             <div class="top-menu" id="topMenu">
                 <button class="top-menu-btn" id="topMenuBtn">≡</button>
                 <div class="top-menu-dropdown hidden" id="topMenuDropdown">
                     <button id="exploreBtn" class="dropdown-item explore-item">🎬 Watch Together</button>
+                    <button id="hyperbeamBtn" class="dropdown-item hyperbeam-item">🌐 Co-Browse</button>
                     <button id="callBtn"    class="dropdown-item call-item">📹 Call</button>
                 </div>
             </div>
@@ -181,7 +185,54 @@
                 </div>
             </div>
 
+            <!-- Hyperbeam Co-Browse Panel -->
+            <div class="hyperbeam-panel hidden" id="hyperbeamPanel">
+                <div class="hyperbeam-url-bar">
+                    <button id="startHyperbeamBtn" class="hb-btn hb-start">▷ Start</button>
+                    <input id="hyperbeamUrlInput" class="hb-url-input" placeholder="Enter URL..." autocomplete="off" />
+                </div>
+                <div class="hyperbeam-wrapper" id="hyperbeamWrapper">
+                    <div class="hyperbeam-empty" id="hyperbeamEmpty">
+                        <div class="hyperbeam-empty-icon">🌐</div>
+                        <div class="hyperbeam-empty-title">Co-Browse</div>
+                        <div class="hyperbeam-empty-sub">Admin: click "Start Co-Browse" to launch a shared browser. Everyone in the room will see the same screen.</div>
+                    </div>
+                    <div class="hyperbeam-container hidden" id="hyperbeamContainer"></div>
+                </div>
+                <div class="hyperbeam-status" id="hyperbeamStatus">
+                    <span id="hyperbeamStatusText">No active session</span>
+                </div>
+
+                <!-- Bottom Chat Section -->
+                <div class="hyperbeam-bottom" id="hyperbeamBottom">
+                    <div class="hyperbeam-bottom-resize" id="hbottomResize"></div>
+                    <div id="hchatMsgs"></div>
+                    <div id="hchatTyping"></div>
+                    <div id="hemojiPicker" class="vemoji-picker hidden"><div class="emoji-grid"></div></div>
+                    <div id="hgifPicker" class="gif-picker gif-picker-video hidden">
+                        <div class="gif-picker-header">
+                            <input id="hgifSearch" class="gif-search-input" placeholder="Search GIFs..." autocomplete="off" />
+                            <button type="button" class="gif-picker-close" id="hcloseGifPicker">✕</button>
+                        </div>
+                        <div class="gif-results" id="hgifResults"></div>
+                    </div>
+                    <div id="hattachPreview" class="attach-preview hidden">
+                        <img id="hattachPreviewImg" />
+                        <button type="button" id="hattachPreviewRemove">✕</button>
+                    </div>
+                    <form id="hform">
+                        <button type="button" id="hemojiBtn">😊</button>
+                        <button type="button" id="hgifBtn">GIF</button>
+                        <button type="button" id="himageBtn">📷</button>
+                        <input id="hinput" placeholder="Type a message..." autocomplete="off" />
+                        <button type="submit">➤</button>
+                    </form>
+                    <input type="file" id="himageInput" accept="image/*" class="hidden" />
+                </div>
+            </div>
+
         </div>
+
     </div>
 </div>
 

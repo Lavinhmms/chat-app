@@ -24,6 +24,7 @@ app.use(express.static("public"));
 app.use("/uploads", express.static("uploads"));
 
 const GIPHY_API_KEY = process.env.GIPHY_KEY || "7ts8YUGRxPmmILiPdopADIpMekHL2Y4S";
+const HB_API_KEY = process.env.HB_API_KEY || "REPLACED";
 const gifCache = new Map();
 setInterval(() => {
     const now = Date.now();
@@ -103,10 +104,24 @@ setInterval(() => {
         const room = rooms[roomId];
         cleanupDisconnectedUsers(room);
         if (Object.keys(room.users).length === 0) {
+            endHyperbeamSession(room);
             delete rooms[roomId];
         }
     });
 }, 10000);
+
+function endHyperbeamSession(room) {
+    if (!room || !room.hyperbeam || !HB_API_KEY) return;
+    const endReq = https.request({
+        hostname: "engine.hyperbeam.com",
+        path: "/v0/vm/" + room.hyperbeam.sessionId,
+        method: "DELETE",
+        headers: { "Authorization": "Bearer " + HB_API_KEY }
+    });
+    endReq.on("error", () => {});
+    endReq.end();
+    room.hyperbeam = null;
+}
 
 io.on("connection", (socket) => {
     socket.roomId = null;
@@ -144,7 +159,8 @@ io.on("connection", (socket) => {
                 admins: new Set(),
                 loopEnabled: false,
                 reactions: {},
-                userStatus: {}
+                userStatus: {},
+                hyperbeam: null
             };
         }
         const room = rooms[roomId];
@@ -157,6 +173,7 @@ io.on("connection", (socket) => {
         room.loopEnabled = false;
         room.reactions = {};
         room.userStatus = {};
+        room.hyperbeam = null;
 
         socket.roomId = roomId;
         socket.join(roomId);
@@ -374,6 +391,66 @@ io.on("connection", (socket) => {
         io.to(socket.roomId).emit("video:loop-state", room.loopEnabled);
     });
 
+    // ── Hyperbeam co-browsing ─────────────────────
+    socket.on("hyperbeam:start", () => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        if (room.hyperbeam) {
+            io.to(socket.roomId).emit("hyperbeam:session", { embedUrl: room.hyperbeam.embedUrl });
+            return;
+        }
+        const hbReq = https.request({
+            hostname: "engine.hyperbeam.com",
+            path: "/v0/vm",
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + HB_API_KEY,
+                "Content-Type": "application/json"
+            }
+        }, (hbRes) => {
+            let data = "";
+            hbRes.on("data", chunk => data += chunk);
+            hbRes.on("end", () => {
+                try {
+                    const result = JSON.parse(data);
+                    console.log("Hyperbeam raw response:", JSON.stringify(result));
+                    if (result.embed_url) {
+                        room.hyperbeam = {
+                            sessionId: result.session_id,
+                            embedUrl: result.embed_url,
+                            adminToken: result.admin_token
+                        };
+                        io.to(socket.roomId).emit("hyperbeam:session", { embedUrl: result.embed_url });
+                    } else {
+                        const errMsg = result.message || result.error || "Failed to create session";
+                        console.log("Hyperbeam error response:", errMsg);
+                        io.to(socket.roomId).emit("hyperbeam:error", errMsg);
+                    }
+                } catch(e) {
+                    console.log("Hyperbeam parse error:", e.message, "raw data:", data);
+                    io.to(socket.roomId).emit("hyperbeam:error", "Invalid response from Hyperbeam");
+                }
+            });
+        });
+        hbReq.on("error", () => io.to(socket.roomId).emit("hyperbeam:error", "Network error"));
+        hbReq.setTimeout(15000, () => { hbReq.destroy(); io.to(socket.roomId).emit("hyperbeam:error", "Timeout"); });
+        hbReq.write("{}");
+        hbReq.end();
+    });
+
+    socket.on("hyperbeam:stop", () => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id) || !room.hyperbeam) return;
+        endHyperbeamSession(room);
+        io.to(socket.roomId).emit("hyperbeam:ended");
+    });
+
+    socket.on("hyperbeam:get-session", () => {
+        const room = getRoom(socket);
+        if (!room || !room.hyperbeam) return;
+        socket.emit("hyperbeam:session", { embedUrl: room.hyperbeam.embedUrl });
+    });
+
     // ── WebRTC signaling ──────────────────────────
     socket.on("call:join", (username) => {
         const room = getRoom(socket);
@@ -468,6 +545,7 @@ io.on("connection", (socket) => {
         const room = getRoom(socket);
         if (!room || !room.admins.has(socket.id)) return;
         io.to(socket.roomId).emit("room:ended");
+        endHyperbeamSession(room);
         Object.keys(room.users).forEach(id => {
             const s = io.sockets.sockets.get(id);
             if (s) s.disconnect(true);
@@ -510,4 +588,5 @@ io.on("connection", (socket) => {
 process.on("uncaughtException", (err) => console.error("Uncaught:", err));
 process.on("unhandledRejection", (err) => console.error("Unhandled:", err));
 
+console.log("HB_API_KEY available:", !!HB_API_KEY);
 server.listen(3000, () => console.log("Server running on http://localhost:3000"));
