@@ -386,7 +386,9 @@ io.on("connection", (socket) => {
         if (data.user && !validate(data.user, MAX_USERNAME)) return;
         if (data.image && typeof data.image === "string" && data.image.length > 500) return;
         if (data.gif && typeof data.gif === "string" && data.gif.length > 500) return;
+        const msgId = data.id ? String(data.id).slice(0, 100) : undefined;
         io.to(socket.roomId).emit("chat message", {
+            id: msgId,
             user: (data.user || "").slice(0, MAX_USERNAME),
             msg: data.msg.slice(0, MAX_MSG_LENGTH),
             image: data.image ? data.image.slice(0, 500) : undefined,

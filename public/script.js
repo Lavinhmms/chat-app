@@ -824,6 +824,7 @@ function toggleGifPicker(picker, searchInput, resultsEl) {
     const opening = picker.classList.toggle("hidden");
     emojiPicker.classList.add("hidden");
     vemojiPicker.classList.add("hidden");
+    hemojiPicker.classList.add("hidden");
     if (opening) {
         searchInput.focus();
         searchInput.select();
