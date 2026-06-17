@@ -627,7 +627,8 @@ io.on("connection", (socket) => {
 
     socket.on("call:offer", ({ to, offer }) => {
         if (!socket.roomId) return;
-        if (typeof offer !== "string" || offer.length > 50000) return;
+        const sdp = typeof offer === "string" ? offer : (offer && offer.sdp);
+        if (!sdp || sdp.length > 50000) return;
         const targetSocket = io.sockets.sockets.get(to);
         if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
         io.to(to).emit("call:offer", { from: socket.id, offer });
@@ -635,7 +636,8 @@ io.on("connection", (socket) => {
 
     socket.on("call:answer", ({ to, answer }) => {
         if (!socket.roomId) return;
-        if (typeof answer !== "string" || answer.length > 50000) return;
+        const sdp = typeof answer === "string" ? answer : (answer && answer.sdp);
+        if (!sdp || sdp.length > 50000) return;
         const targetSocket = io.sockets.sockets.get(to);
         if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
         io.to(to).emit("call:answer", { from: socket.id, answer });
@@ -719,7 +721,8 @@ io.on("connection", (socket) => {
 
     socket.on("voice:offer", ({ to, offer }) => {
         if (!socket.roomId) return;
-        if (typeof offer !== "string" || offer.length > 50000) return;
+        const sdp = typeof offer === "string" ? offer : (offer && offer.sdp);
+        if (!sdp || sdp.length > 50000) return;
         const targetSocket = io.sockets.sockets.get(to);
         if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
         io.to(to).emit("voice:offer", { from: socket.id, offer });
@@ -727,7 +730,8 @@ io.on("connection", (socket) => {
 
     socket.on("voice:answer", ({ to, answer }) => {
         if (!socket.roomId) return;
-        if (typeof answer !== "string" || answer.length > 50000) return;
+        const sdp = typeof answer === "string" ? answer : (answer && answer.sdp);
+        if (!sdp || sdp.length > 50000) return;
         const targetSocket = io.sockets.sockets.get(to);
         if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
         io.to(to).emit("voice:answer", { from: socket.id, answer });

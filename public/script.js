@@ -1869,6 +1869,10 @@ voiceMicBtn.addEventListener("click", async () => {
         await startVoiceStream();
         socket.emit("voice:start");
     } else {
+        if (!voiceStream) {
+            await startVoiceStream();
+            if (!voiceStream) return;
+        }
         voiceEnabled = !voiceEnabled;
         if (voiceStream) {
             voiceStream.getAudioTracks().forEach(t => { t.enabled = voiceEnabled; });
@@ -2297,7 +2301,7 @@ socket.on("hyperbeam:ended", () => {
     hyperbeamStatusText.textContent = "⏹ Session ended";
     hyperbeamUrlInput.value = "";
     hyperbeamFsBtn.classList.add("hidden");
-    if (document.fullscreenElement) document.exitFullscreen();
+    if (getFullscreenElement()) exitFullscreen();
 });
 
 socket.on("hyperbeam:error", (msg) => {
@@ -2315,21 +2319,45 @@ socket.on("hyperbeam:error", (msg) => {
 const hyperbeamFsBtn = document.getElementById("hyperbeamFullscreenBtn");
 let hyperbeamFsActive = false;
 
+function requestFullscreen(el) {
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (fn) {
+        fn.call(el);
+    } else if (el.webkitEnterFullscreen && el.tagName === "VIDEO") {
+        el.webkitEnterFullscreen();
+    } else {
+        hyperbeamStatusText.textContent = "⚠️ Fullscreen not supported on this device";
+    }
+}
+
+function exitFullscreen() {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (fn) fn.call(document);
+}
+
+function getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+}
+
 function updateHyperbeamFsBtn() {
     hyperbeamFsBtn.textContent = hyperbeamFsActive ? "⧉" : "⛶";
     hyperbeamFsBtn.title = hyperbeamFsActive ? "Exit full screen (F)" : "Full screen (F)";
 }
 
 hyperbeamFsBtn.addEventListener("click", () => {
-    if (!document.fullscreenElement) {
-        hyperbeamWrapper.requestFullscreen();
+    if (!getFullscreenElement()) {
+        requestFullscreen(hyperbeamWrapper);
     } else {
-        document.exitFullscreen();
+        exitFullscreen();
     }
 });
 
 document.addEventListener("fullscreenchange", () => {
-    hyperbeamFsActive = !!document.fullscreenElement;
+    hyperbeamFsActive = !!getFullscreenElement();
+    updateHyperbeamFsBtn();
+});
+document.addEventListener("webkitfullscreenchange", () => {
+    hyperbeamFsActive = !!getFullscreenElement();
     updateHyperbeamFsBtn();
 });
 
