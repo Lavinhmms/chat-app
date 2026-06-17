@@ -9,20 +9,134 @@ const https      = require("https");
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, { cors: { origin: "*" } });
+
+// ── Security headers ──────────────────────────────
+app.use((req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-XSS-Protection", "0");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Content-Security-Policy", "default-src 'self' https:; script-src 'self' https://cdnjs.cloudflare.com https://www.youtube.com; frame-src https://www.youtube.com https://*.hyperbeam.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; connect-src 'self' ws: wss:");
+    next();
+});
+
+const ALLOWED_ORIGIN = process.env.ORIGIN || "http://localhost:3000";
+const io     = new Server(server, {
+    cors: {
+        origin: ALLOWED_ORIGIN,
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+});
+
+// ── Validation helpers ─────────────────────────────
+const MAX_USERNAME     = 30;
+const MAX_ROOM_NAME    = 50;
+const MAX_MSG_LENGTH   = 2000;
+const MAX_PASSWORD     = 100;
+const MAX_QUEUE_ITEMS  = 6;
+const VALID_STATUSES   = new Set(["online", "away", "busy", "offline"]);
+const VALID_VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
+function validate(str, maxLen) {
+    return typeof str === "string" && str.trim().length > 0 && str.trim().length <= maxLen;
+}
+function validateLen(str, maxLen) {
+    return typeof str === "string" && str.length <= maxLen;
+}
+function isInRoom(socket) {
+    return !!socket.roomId;
+}
+function isAdminOf(socket, room) {
+    return room && room.admins.has(socket.id);
+}
+function membersMatch(room) {
+    if (!room) return [];
+    return Object.keys(room.users).filter(id => io.sockets.sockets.has(id));
+}
+
+// ── Rate limiting ──────────────────────────────────
+const RATE_LIMIT_WINDOW = 1000; // 1 second
+const RATE_LIMIT_MAX    = 10;   // max events per window
+const rateLimits = new Map();
+
+function rateLimit(socket) {
+    const now = Date.now();
+    let entry = rateLimits.get(socket.id);
+    if (!entry) {
+        entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
+        rateLimits.set(socket.id, entry);
+    }
+    if (now > entry.resetAt) {
+        entry.count = 0;
+        entry.resetAt = now + RATE_LIMIT_WINDOW;
+    }
+    entry.count++;
+    return entry.count <= RATE_LIMIT_MAX;
+}
+
+// Periodic cleanup of stale rate limit entries
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, entry] of rateLimits) {
+        if (now > entry.resetAt + 5000) rateLimits.delete(id);
+    }
+}, 30000);
+
+// ── Room creation rate limiting ────────────────────
+const ROOM_CREATE_LIMIT = 5; // per minute
+const roomCreateTracker = new Map();
+function canCreateRoom(socket) {
+    const now = Date.now();
+    const entry = roomCreateTracker.get(socket.id);
+    if (!entry) {
+        roomCreateTracker.set(socket.id, { count: 1, resetAt: now + 60000 });
+        return true;
+    }
+    if (now > entry.resetAt) {
+        entry.count = 1;
+        entry.resetAt = now + 60000;
+        return true;
+    }
+    entry.count++;
+    return entry.count <= ROOM_CREATE_LIMIT;
+}
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+const ALLOWED_MIMES = new Set([
+    "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"
+]);
+const ALLOWED_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
+
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsDir),
-    filename: (req, file, cb) => cb(null, Date.now() + "-" + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, Date.now() + "-" + Math.round(Math.random() * 1E9) + ext);
+    }
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (ALLOWED_MIMES.has(file.mimetype) && ALLOWED_EXTS.has(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only image files are allowed (JPEG, PNG, GIF, WebP, BMP)"));
+        }
+    }
+});
 
 app.use(express.static("public"));
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", (req, res, next) => {
+    res.setHeader("Content-Disposition", "attachment");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    express.static("uploads")(req, res, next);
+});
 
 const GIPHY_API_KEY = process.env.GIPHY_KEY || "7ts8YUGRxPmmILiPdopADIpMekHL2Y4S";
 const HB_API_KEY = process.env.HB_API_KEY;
@@ -140,9 +254,12 @@ io.on("connection", (socket) => {
     });
 
     socket.on("room:create", ({ name, roomName, password }) => {
+        if (!rateLimit(socket) || !canCreateRoom(socket)) return;
         const roomId = (roomName || "").trim().toLowerCase().replace(/\s+/g, "-");
         const username = (name || "").trim();
         if (!roomId || !username) return;
+        if (roomId.length > MAX_ROOM_NAME || username.length > MAX_USERNAME) return;
+        if (password && typeof password === "string" && password.length > MAX_PASSWORD) return;
         if (rooms[roomId]) {
             cleanupDisconnectedUsers(rooms[roomId]);
             if (Object.keys(rooms[roomId].users).length > 0) {
@@ -158,16 +275,19 @@ io.on("connection", (socket) => {
                 callUsers: {},
                 roomPassword: "",
                 admins: new Set(),
+                adminUser: null,
                 loopEnabled: false,
                 reactions: {},
                 userStatus: {},
-                hyperbeam: null
+                hyperbeam: null,
+                voiceUsers: {},
+                voiceActive: false
             };
         }
         const room = rooms[roomId];
         room.roomPassword = password || "";
         room.admins = new Set([socket.id]);
-        room.users = {};
+        room.adminUser = username;
         room.roomState = { videoId: null, playing: false, time: 0, updatedAt: Date.now() };
         room.queue = [];
         room.callUsers = {};
@@ -175,6 +295,8 @@ io.on("connection", (socket) => {
         room.reactions = {};
         room.userStatus = {};
         room.hyperbeam = null;
+        room.voiceUsers = {};
+        room.voiceActive = false;
 
         socket.roomId = roomId;
         socket.join(roomId);
@@ -190,16 +312,21 @@ io.on("connection", (socket) => {
     });
 
     socket.on("room:join", ({ roomId, name, password }) => {
+        if (!rateLimit(socket)) return;
         const room = rooms[roomId];
         const username = (name || "").trim();
         if (!room) { socket.emit("auth:error", "Room not found"); return; }
-        if (!username) return;
+        if (!username || username.length > MAX_USERNAME) return;
         if (room.roomPassword && password !== room.roomPassword) { socket.emit("auth:error", "Wrong password"); return; }
 
         socket.roomId = roomId;
         socket.join(roomId);
         room.users[socket.id] = username;
 
+        // Reclaim admin if username matches original room creator
+        if (room.adminUser && room.adminUser === username) {
+            room.admins.add(socket.id);
+        }
         if (!room.admins.size) {
             room.admins.add(socket.id);
         }
@@ -225,6 +352,11 @@ io.on("connection", (socket) => {
         }
         socket.emit("video:loop-state", room.loopEnabled);
         socket.emit("video:queue-update", room.queue);
+        if (room.voiceActive) {
+            socket.emit("voice:started", {
+                participants: Object.entries(room.voiceUsers || {}).map(([id, name]) => ({ socketId: id, username: name }))
+            });
+        }
     });
 
     // ── Auth ──────────────────────────────────────
@@ -247,11 +379,23 @@ io.on("connection", (socket) => {
 
     // ── Chat / presence ───────────────────────────
     socket.on("chat message", (data) => {
-        if (!socket.roomId) return;
-        io.to(socket.roomId).emit("chat message", data);
+        if (!socket.roomId || !rateLimit(socket)) return;
+        if (!data || typeof data !== "object") return;
+        if (typeof data.msg !== "string" || data.msg.length > MAX_MSG_LENGTH) return;
+        if (data.msg.trim().length === 0 && !data.image && !data.gif) return;
+        if (data.user && !validate(data.user, MAX_USERNAME)) return;
+        if (data.image && typeof data.image === "string" && data.image.length > 500) return;
+        if (data.gif && typeof data.gif === "string" && data.gif.length > 500) return;
+        io.to(socket.roomId).emit("chat message", {
+            user: (data.user || "").slice(0, MAX_USERNAME),
+            msg: data.msg.slice(0, MAX_MSG_LENGTH),
+            image: data.image ? data.image.slice(0, 500) : undefined,
+            gif: data.gif ? data.gif.slice(0, 500) : undefined
+        });
     });
     socket.on("typing", (u) => {
-        if (!socket.roomId) return;
+        if (!socket.roomId || !rateLimit(socket)) return;
+        if (!validate(u, MAX_USERNAME)) return;
         socket.to(socket.roomId).emit("typing", u);
     });
     socket.on("stop typing", () => {
@@ -261,6 +405,7 @@ io.on("connection", (socket) => {
 
     // ── Message reactions ──────────────────────────
     socket.on("message:react", ({ messageId, emoji }) => {
+        if (!rateLimit(socket)) return;
         const room = getRoom(socket);
         if (!room || !messageId || !emoji) return;
         if (!room.reactions) room.reactions = {};
@@ -287,11 +432,14 @@ io.on("connection", (socket) => {
 
     // ── User status ────────────────────────────────
     socket.on("user:status", (status) => {
+        if (!rateLimit(socket)) return;
         const room = getRoom(socket);
         if (!room) return;
+        const s = (status || "").toLowerCase();
+        if (!VALID_STATUSES.has(s)) return;
         if (!room.userStatus) room.userStatus = {};
-        room.userStatus[socket.id] = status;
-        socket.to(socket.roomId).emit("user:status-update", { socketId: socket.id, status });
+        room.userStatus[socket.id] = s;
+        socket.to(socket.roomId).emit("user:status-update", { socketId: socket.id, status: s });
     });
 
     // ── Video sync ────────────────────────────────
@@ -330,8 +478,11 @@ io.on("connection", (socket) => {
     socket.on("video:add-to-queue", (video) => {
         const room = getRoom(socket);
         if (!room) return;
-        if (room.queue.length >= 6) return;
-        room.queue.push(video);
+        if (room.queue.length >= MAX_QUEUE_ITEMS) return;
+        if (!video || typeof video !== "object") return;
+        if (!video.videoId || !VALID_VIDEO_ID_RE.test(video.videoId)) return;
+        const title = typeof video.title === "string" ? video.title.slice(0, 100) : video.videoId;
+        room.queue.push({ videoId: video.videoId, title });
         io.to(socket.roomId).emit("video:queue-update", room.queue);
     });
 
@@ -454,6 +605,7 @@ io.on("connection", (socket) => {
 
     // ── WebRTC signaling ──────────────────────────
     socket.on("call:join", (username) => {
+        if (!rateLimit(socket)) return;
         const room = getRoom(socket);
         if (!room) return;
         room.callUsers[socket.id] = username;
@@ -474,19 +626,31 @@ io.on("connection", (socket) => {
     });
 
     socket.on("call:offer", ({ to, offer }) => {
+        if (!socket.roomId) return;
+        if (typeof offer !== "string" || offer.length > 50000) return;
+        const targetSocket = io.sockets.sockets.get(to);
+        if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
         io.to(to).emit("call:offer", { from: socket.id, offer });
     });
 
     socket.on("call:answer", ({ to, answer }) => {
+        if (!socket.roomId) return;
+        if (typeof answer !== "string" || answer.length > 50000) return;
+        const targetSocket = io.sockets.sockets.get(to);
+        if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
         io.to(to).emit("call:answer", { from: socket.id, answer });
     });
 
     socket.on("call:ice-candidate", ({ to, candidate }) => {
+        if (!socket.roomId) return;
+        const targetSocket = io.sockets.sockets.get(to);
+        if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
         io.to(to).emit("call:ice-candidate", { from: socket.id, candidate });
     });
 
     // ── Call ringing ────────────────────────────
     socket.on("call:ring", (data) => {
+        if (!rateLimit(socket)) return;
         socket.to(socket.roomId).emit("call:incoming", { from: socket.id, username: data.username });
     });
 
@@ -495,16 +659,108 @@ io.on("connection", (socket) => {
     });
 
     socket.on("call:accept", (data) => {
+        if (!rateLimit(socket)) return;
         const room = getRoom(socket);
         io.to(data.to).emit("call:accepted", { socketId: socket.id, username: room ? (room.users[socket.id] || "Unknown") : "Unknown" });
     });
 
     socket.on("call:reject", (data) => {
+        if (!rateLimit(socket)) return;
         const room = getRoom(socket);
         io.to(data.to).emit("call:rejected", { socketId: socket.id, username: room ? (room.users[socket.id] || "Unknown") : "Unknown" });
     });
 
+    // ── Voice Call (audio-only) ─────────────────────
+    socket.on("voice:start", () => {
+        if (!rateLimit(socket)) return;
+        const room = getRoom(socket);
+        if (!room) return;
+        room.voiceActive = true;
+        if (!room.voiceUsers) room.voiceUsers = {};
+        room.voiceUsers[socket.id] = room.users[socket.id] || "Unknown";
+        io.to(socket.roomId).emit("voice:started", {
+            participants: Object.entries(room.voiceUsers).map(([id, name]) => ({ socketId: id, username: name }))
+        });
+    });
 
+    socket.on("voice:join", () => {
+        if (!rateLimit(socket)) return;
+        const room = getRoom(socket);
+        if (!room || !room.voiceActive) return;
+        if (!room.voiceUsers) room.voiceUsers = {};
+        room.voiceUsers[socket.id] = room.users[socket.id] || "Unknown";
+        const others = Object.entries(room.voiceUsers)
+            .filter(([id]) => id !== socket.id)
+            .map(([id, name]) => ({ socketId: id, username: name }));
+        socket.emit("voice:existing-users", others);
+        socket.to(socket.roomId).emit("voice:user-joined", { socketId: socket.id, username: room.users[socket.id] || "Unknown" });
+        io.to(socket.roomId).emit("voice:participants", Object.keys(room.voiceUsers).length);
+    });
+
+    socket.on("voice:leave", () => {
+        const room = getRoom(socket);
+        if (!room || !room.voiceUsers) return;
+        delete room.voiceUsers[socket.id];
+        socket.to(socket.roomId).emit("voice:user-left", socket.id);
+        io.to(socket.roomId).emit("voice:participants", Object.keys(room.voiceUsers).length);
+        if (Object.keys(room.voiceUsers).length === 0) {
+            room.voiceActive = false;
+            io.to(socket.roomId).emit("voice:ended");
+        }
+    });
+
+    socket.on("voice:end", () => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        room.voiceUsers = {};
+        room.voiceActive = false;
+        io.to(socket.roomId).emit("voice:ended");
+    });
+
+    socket.on("voice:offer", ({ to, offer }) => {
+        if (!socket.roomId) return;
+        if (typeof offer !== "string" || offer.length > 50000) return;
+        const targetSocket = io.sockets.sockets.get(to);
+        if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
+        io.to(to).emit("voice:offer", { from: socket.id, offer });
+    });
+
+    socket.on("voice:answer", ({ to, answer }) => {
+        if (!socket.roomId) return;
+        if (typeof answer !== "string" || answer.length > 50000) return;
+        const targetSocket = io.sockets.sockets.get(to);
+        if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
+        io.to(to).emit("voice:answer", { from: socket.id, answer });
+    });
+
+    socket.on("voice:ice-candidate", ({ to, candidate }) => {
+        if (!socket.roomId) return;
+        const targetSocket = io.sockets.sockets.get(to);
+        if (!targetSocket || targetSocket.roomId !== socket.roomId) return;
+        io.to(to).emit("voice:ice-candidate", { from: socket.id, candidate });
+    });
+
+    socket.on("voice:admin-mute", (targetId) => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        io.to(targetId).emit("voice:admin-muted");
+    });
+
+    socket.on("voice:admin-unmute", (targetId) => {
+        const room = getRoom(socket);
+        if (!room || !room.admins.has(socket.id)) return;
+        io.to(targetId).emit("voice:admin-unmuted");
+    });
+
+    socket.on("voice:speaking", () => {
+        if (!socket.roomId) return;
+        socket.to(socket.roomId).emit("voice:speaking", { socketId: socket.id });
+    });
+
+    socket.on("voice:stopped-speaking", () => {
+        if (!socket.roomId) return;
+        socket.to(socket.roomId).emit("voice:stopped-speaking", { socketId: socket.id });
+    });
 
     // ── Leave room ─────────────────────────────────
     socket.on("room:leave", (data) => {
@@ -521,6 +777,15 @@ io.on("connection", (socket) => {
                 delete room.callUsers[socket.id];
                 socket.to(roomId).emit("call:user-left", socket.id);
                 io.to(roomId).emit("call:participants", Object.keys(room.callUsers).length);
+            }
+            if (room.voiceUsers && room.voiceUsers[socket.id]) {
+                delete room.voiceUsers[socket.id];
+                socket.to(roomId).emit("voice:user-left", socket.id);
+                io.to(roomId).emit("voice:participants", Object.keys(room.voiceUsers).length);
+                if (Object.keys(room.voiceUsers).length === 0) {
+                    room.voiceActive = false;
+                    io.to(roomId).emit("voice:ended");
+                }
             }
             socket.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
             const wasAdmin = room.admins.has(socket.id);
@@ -572,6 +837,15 @@ io.on("connection", (socket) => {
             socket.to(roomId).emit("call:user-left", socket.id);
             socket.to(roomId).emit("call:canceled");
             io.to(roomId).emit("call:participants", Object.keys(room.callUsers).length);
+        }
+        if (room.voiceUsers && room.voiceUsers[socket.id]) {
+            delete room.voiceUsers[socket.id];
+            socket.to(roomId).emit("voice:user-left", socket.id);
+            io.to(roomId).emit("voice:participants", Object.keys(room.voiceUsers).length);
+            if (Object.keys(room.voiceUsers).length === 0) {
+                room.voiceActive = false;
+                io.to(roomId).emit("voice:ended");
+            }
         }
         io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
         if (!room.admins.size && Object.keys(room.users).length > 0) {

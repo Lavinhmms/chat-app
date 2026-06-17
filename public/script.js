@@ -10,6 +10,34 @@ let   userStatus    = "online";
 const REACT_EMOJIS = ["👍", "❤️", "😂", "😮"];
 const MORE_REACT_EMOJIS = ["😢","🙏","🔥","🎉","👏","💯","😡","🥺","😎","🤔","💔","✨","😴","🙌"];
 
+// ── App lock screen ──────────────────────────────
+const LOCK_HASH = "8480437abb0d9ee5acafe90e3d87983d27bbb4bcda551461c7dc29ad33f0c65e";
+const lockOverlay   = document.getElementById("lockOverlay");
+const lockPassword  = document.getElementById("lockPassword");
+const lockUnlockBtn = document.getElementById("lockUnlockBtn");
+const lockError     = document.getElementById("lockError");
+
+async function checkUnlock() {
+    const pw = lockPassword.value;
+    const enc = new TextEncoder();
+    const hash = await crypto.subtle.digest("SHA-256", enc.encode(pw));
+    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
+    if (hex === LOCK_HASH) {
+        lockOverlay.classList.add("hidden");
+        lockPassword.value = "";
+        lockError.classList.add("hidden");
+    } else {
+        lockError.classList.remove("hidden");
+        lockPassword.value = "";
+        lockPassword.focus();
+    }
+}
+
+lockUnlockBtn.addEventListener("click", checkUnlock);
+lockPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") checkUnlock();
+});
+
 function generateMessageId() {
     return socket.id + "-" + Date.now();
 }
@@ -92,13 +120,13 @@ socket.on("room:list", (rooms) => {
     rooms.forEach(r => {
         const div = document.createElement("div");
         div.className = "room-list-item";
-        div.innerHTML = `
+        div.innerHTML = DOMPurify.sanitize(`
             <div>
                 <div class="room-list-name">${r.id}</div>
                 <div class="room-list-meta">${r.userCount} user${r.userCount !== 1 ? 's' : ''}</div>
             </div>
             ${r.hasPassword ? '<span class="room-list-pw">🔒</span>' : ''}
-        `;
+        `);
         div.addEventListener("click", () => joinRoom(r.id, r.hasPassword));
         roomList.appendChild(div);
     });
@@ -514,10 +542,10 @@ function appendMessage(data, container) {
     if (data.user === username.value) div.classList.add("self");
     else if (container === chat) playNotification();
     if (data.id) div.dataset.id = data.id;
-    let html = "<strong>" + data.user + "</strong>" + data.msg;
-    if (data.image) html += '<img class="message-media" src="' + data.image + '" onclick="window.open(this.src)" loading="lazy" />';
-    if (data.gif) html += '<img class="message-media" src="' + data.gif + '" loading="lazy" />';
-    div.innerHTML = html;
+    let html = "<strong>" + DOMPurify.sanitize(data.user) + "</strong>" + DOMPurify.sanitize(data.msg);
+    if (data.image) html += '<img class="message-media" src="' + DOMPurify.sanitize(data.image) + '" onclick="window.open(this.src)" loading="lazy" />';
+    if (data.gif) html += '<img class="message-media" src="' + DOMPurify.sanitize(data.gif) + '" loading="lazy" />';
+    div.innerHTML = DOMPurify.sanitize(html);
 
     const reactionsDiv = document.createElement("div");
     reactionsDiv.className = "message-reactions";
@@ -714,7 +742,7 @@ function renderUserList() {
     Object.entries(roomUsersMap).forEach(([id, name]) => {
         const li = document.createElement("li");
         const status = userStatusMap[id] || "online";
-        li.innerHTML = "<span>" + statusDot(status) + " " + name + "</span>";
+        li.innerHTML = "<span>" + statusDot(status) + " " + DOMPurify.sanitize(name) + "</span>";
         if (isAdmin && id !== socket.id) {
             const kickBtn = document.createElement("button");
             kickBtn.className = "kick-btn";
@@ -1238,7 +1266,7 @@ function showBlockedMessage(videoId) {
         "<div style='font-size:44px'>🚫</div>" +
         "<div style='color:white;font-size:16px;font-weight:bold'>This video can't be embedded</div>" +
         "<div style='color:rgba(255,255,255,0.5);font-size:12px;line-height:1.7;max-width:280px'>The video owner disabled external playback. Try a different video.</div>" +
-        "<a href='https://www.youtube.com/watch?v=" + (videoId||"") + "' target='_blank' style='padding:12px 28px;background:#ff0000;color:white;border-radius:10px;text-decoration:none;font-size:14px;font-weight:bold'>▶ Open on YouTube</a>" +
+        "<a href='https://www.youtube.com/watch?v=" + DOMPurify.sanitize(videoId||"") + "' target='_blank' style='padding:12px 28px;background:#ff0000;color:white;border-radius:10px;text-decoration:none;font-size:14px;font-weight:bold'>▶ Open on YouTube</a>" +
         "<div style='color:rgba(255,255,255,0.3);font-size:11px'>Tip: search for a lyrics or cover version</div>";
     const wrapper = document.querySelector(".video-wrapper");
     if (wrapper) wrapper.appendChild(msg);
@@ -1310,7 +1338,7 @@ function renderQueue() {
         const div = document.createElement("div");
         div.className = "queue-item";
         div.innerHTML =
-            "<span class='queue-item-title'>" + (item.title || item.videoId) + "</span>" +
+            "<span class='queue-item-title'>" + DOMPurify.sanitize(item.title || item.videoId) + "</span>" +
             "<button class='queue-item-remove' data-index='" + i + "'>✕</button>";
         div.addEventListener("click", () => {
             socket.emit("video:play-from-queue", i);
@@ -1393,10 +1421,10 @@ async function searchYouTube(query) {
         } catch(e) { continue; }
     }
     searchResults.innerHTML =
-        "<div style='padding:14px;display:flex;flex-direction:column;gap:10px'>" +
+        DOMPurify.sanitize("<div style='padding:14px;display:flex;flex-direction:column;gap:10px'>" +
         "<div style='color:rgba(255,255,255,0.5);font-size:13px'>Search unavailable right now.</div>" +
         "<a href='https://www.youtube.com/results?search_query=" + enc + "' target='_blank' style='color:#38bdf8;font-size:13px'>🔗 Search on YouTube → paste the link above</a>" +
-        "</div>";
+        "</div>");
 }
 
 function renderResults(items) {
@@ -1409,7 +1437,7 @@ function renderResults(items) {
         img.onerror = function() { this.style.display = "none"; };
         const info = document.createElement("div");
         info.className = "search-item-info";
-        info.innerHTML = "<div class='search-item-title'>" + (item.title||"Unknown") + "</div><div class='search-item-channel'>" + (item.author||"") + "</div>";
+        info.innerHTML = DOMPurify.sanitize("<div class='search-item-title'>" + (item.title||"Unknown") + "</div><div class='search-item-channel'>" + (item.author||"") + "</div>");
         div.appendChild(img); div.appendChild(info);
         div.addEventListener("click", () => loadVideo(item.videoId, item.title));
         searchResults.appendChild(div);
@@ -1679,6 +1707,323 @@ function hStopResize() {
 }
 
 // ════════════════════════════════════════════════════
+// VOICE CALL — Audio only
+// ════════════════════════════════════════════════════
+
+const voiceMicBtn       = document.getElementById("voiceMicBtn");
+
+let inVoiceCall     = false;
+let voiceEnabled    = true;
+let voiceStream     = null;
+let voicePeers      = {};
+let voiceAudioElements = {};
+let voiceActiveRoom = false;
+
+const VOICE_RTC_CONFIG = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+    ]
+};
+
+function updateVoiceMicBtn() {
+    voiceMicBtn.classList.toggle("muted", voiceEnabled);
+    voiceMicBtn.title = voiceEnabled ? "Mute" : "Unmute";
+}
+
+async function startVoiceStream() {
+    if (voiceStream) return voiceStream;
+    try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        voiceEnabled = true;
+        updateVoiceMicBtn();
+        startSpeakingDetection(voiceStream);
+        return voiceStream;
+    } catch(e) {
+        console.warn("Microphone access denied");
+        return null;
+    }
+}
+
+function stopVoiceStream() {
+    stopSpeakingDetection();
+    if (voiceStream) {
+        voiceStream.getTracks().forEach(t => t.stop());
+        voiceStream = null;
+    }
+}
+
+// ── Speaking detection ──
+let voiceSpeakingMap = {};
+let speakingInterval = null;
+let speakingAudioCtx = null;
+let isCurrentlySpeaking = false;
+
+function startSpeakingDetection(stream) {
+    stopSpeakingDetection();
+    if (!stream) return;
+    try {
+        speakingAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = speakingAudioCtx.createMediaStreamSource(stream);
+        const analyser = speakingAudioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        speakingInterval = setInterval(() => {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const avg = sum / dataArray.length;
+            if (avg > 18 && !isCurrentlySpeaking) {
+                isCurrentlySpeaking = true;
+                socket.emit("voice:speaking");
+            } else if (avg <= 12 && isCurrentlySpeaking) {
+                isCurrentlySpeaking = false;
+                socket.emit("voice:stopped-speaking");
+            }
+        }, 150);
+    } catch(e) {}
+}
+
+function stopSpeakingDetection() {
+    if (speakingInterval) {
+        clearInterval(speakingInterval);
+        speakingInterval = null;
+    }
+    if (speakingAudioCtx) {
+        try { speakingAudioCtx.close(); } catch(e) {}
+        speakingAudioCtx = null;
+    }
+    isCurrentlySpeaking = false;
+}
+
+function joinVoiceCall() {
+    if (inVoiceCall) return;
+    inVoiceCall = true;
+    voiceMicBtn.title = "Mute";
+    socket.emit("voice:join");
+}
+
+function leaveVoiceCall() {
+    if (!inVoiceCall) return;
+    inVoiceCall = false;
+    voiceActiveRoom = false;
+    voiceMicBtn.title = "Start voice call";
+
+    Object.values(voicePeers).forEach(pc => pc.close());
+    voicePeers = {};
+    Object.values(voiceAudioElements).forEach(el => el.remove());
+    voiceAudioElements = {};
+    stopVoiceStream();
+
+    socket.emit("voice:leave");
+}
+
+function createVoicePeer(remoteSocketId, initiator) {
+    const pc = new RTCPeerConnection(VOICE_RTC_CONFIG);
+    voicePeers[remoteSocketId] = pc;
+
+    if (voiceStream) {
+        voiceStream.getTracks().forEach(track => pc.addTrack(track, voiceStream));
+    }
+
+    pc.ontrack = (e) => {
+        if (!voiceAudioElements[remoteSocketId]) {
+            const audio = document.createElement("audio");
+            audio.autoplay = true;
+            audio.style.display = "none";
+            document.body.appendChild(audio);
+            voiceAudioElements[remoteSocketId] = audio;
+        }
+        voiceAudioElements[remoteSocketId].srcObject = e.streams[0];
+    };
+
+    pc.onicecandidate = (e) => {
+        if (e.candidate) {
+            socket.emit("voice:ice-candidate", { to: remoteSocketId, candidate: e.candidate });
+        }
+    };
+
+    pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+            delete voicePeers[remoteSocketId];
+        }
+    };
+
+    if (initiator) {
+        pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => {
+                socket.emit("voice:offer", { to: remoteSocketId, offer: pc.localDescription });
+            })
+            .catch(console.error);
+    }
+
+    return pc;
+}
+
+// ── Voice Call mic button (top bar) ──
+voiceMicBtn.addEventListener("click", async () => {
+    if (!voiceActiveRoom) {
+        await startVoiceStream();
+        socket.emit("voice:start");
+    } else {
+        voiceEnabled = !voiceEnabled;
+        if (voiceStream) {
+            voiceStream.getAudioTracks().forEach(t => { t.enabled = voiceEnabled; });
+        }
+        updateVoiceMicBtn();
+    }
+});
+
+// ── Socket events ──
+socket.on("voice:started", async ({ participants }) => {
+    voiceActiveRoom = true;
+    voiceSpeakingMap = {};
+    if (!voiceStream) await startVoiceStream();
+    if (!inVoiceCall) joinVoiceCall();
+    renderUserList();
+});
+
+socket.on("voice:existing-users", (users) => {
+    users.forEach(({ socketId }) => {
+        createVoicePeer(socketId, true);
+    });
+});
+
+socket.on("voice:user-joined", async ({ socketId }) => {
+    if (!inVoiceCall) return;
+    if (!voiceStream) await startVoiceStream();
+    createVoicePeer(socketId, false);
+});
+
+socket.on("voice:offer", async ({ from, offer }) => {
+    if (!inVoiceCall) return;
+    let pc = voicePeers[from];
+    if (!pc) pc = createVoicePeer(from, false);
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit("voice:answer", { to: from, answer: pc.localDescription });
+});
+
+socket.on("voice:answer", async ({ from, answer }) => {
+    const pc = voicePeers[from];
+    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+});
+
+socket.on("voice:ice-candidate", async ({ from, candidate }) => {
+    const pc = voicePeers[from];
+    if (pc) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+        catch(e) { console.error("Voice ICE error:", e); }
+    }
+});
+
+socket.on("voice:user-left", (socketId) => {
+    if (voicePeers[socketId]) {
+        voicePeers[socketId].close();
+        delete voicePeers[socketId];
+    }
+    if (inVoiceCall && Object.keys(voicePeers).length === 0) {
+        leaveVoiceCall();
+    }
+});
+
+socket.on("voice:participants", (count) => {});
+
+socket.on("voice:ended", () => {
+    voiceActiveRoom = false;
+    voiceSpeakingMap = {};
+    voiceEnabled = false;
+    voiceMicBtn.classList.remove("muted");
+    voiceMicBtn.title = "Start voice call";
+    if (inVoiceCall) leaveVoiceCall();
+    renderUserList();
+});
+
+socket.on("voice:admin-muted", () => {
+    voiceEnabled = false;
+    if (voiceStream) {
+        voiceStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    }
+    updateVoiceMicBtn();
+});
+
+socket.on("voice:admin-unmuted", () => {
+    voiceEnabled = true;
+    if (voiceStream) {
+        voiceStream.getAudioTracks().forEach(t => { t.enabled = true; });
+    }
+    updateVoiceMicBtn();
+});
+
+// ── Speaking detection events ──
+socket.on("voice:speaking", ({ socketId }) => {
+    voiceSpeakingMap[socketId] = true;
+    renderUserList();
+});
+
+socket.on("voice:stopped-speaking", ({ socketId }) => {
+    voiceSpeakingMap[socketId] = false;
+    renderUserList();
+});
+
+// ── Inject admin voice mute buttons in user list ──
+// (rendered inside renderUserList)
+const _origRender = renderUserList;
+function renderUserListWithVoice() {
+    if (!usersList) return;
+    usersList.innerHTML = "";
+    Object.entries(roomUsersMap).forEach(([id, name]) => {
+        const li = document.createElement("li");
+        if (voiceSpeakingMap[id]) li.classList.add("speaking");
+        const status = userStatusMap[id] || "online";
+        li.innerHTML = "<span>" + statusDot(status) + " " + DOMPurify.sanitize(name) + "</span>";
+        if (isAdmin && id !== socket.id) {
+            const kickBtn = document.createElement("button");
+            kickBtn.className = "kick-btn";
+            kickBtn.textContent = "✕";
+            kickBtn.title = name;
+            kickBtn.addEventListener("click", () => {
+                if (confirm("Kick " + name + "?")) socket.emit("auth:kick", id);
+            });
+            li.appendChild(kickBtn);
+        }
+        // Voice mute button for admin
+        if (isAdmin && id !== socket.id && voiceActiveRoom) {
+            const muted = voicePeers[id] && voicePeers[id]._adminMuted;
+            const muteBtn = document.createElement("button");
+            muteBtn.className = "voice-mute-btn" + (muted ? " muted" : "");
+            muteBtn.textContent = muted ? "🔇" : "🎙️";
+            muteBtn.title = muted ? "Unmute" : "Mute";
+            muteBtn.addEventListener("click", () => {
+                if (muted) {
+                    socket.emit("voice:admin-unmute", id);
+                    if (voicePeers[id]) voicePeers[id]._adminMuted = false;
+                } else {
+                    socket.emit("voice:admin-mute", id);
+                    if (voicePeers[id]) voicePeers[id]._adminMuted = true;
+                }
+                renderUserListWithVoice();
+            });
+            li.appendChild(muteBtn);
+        }
+        usersList.appendChild(li);
+    });
+}
+renderUserList = renderUserListWithVoice;
+
+// Also clean up voice on room leave
+const _origGoToLobby = goToLobby;
+function goToLobbyWithVoice(msg) {
+    if (inVoiceCall) leaveVoiceCall();
+    _origGoToLobby(msg);
+}
+goToLobby = goToLobbyWithVoice;
+
+// ════════════════════════════════════════════════════
 // GROUP VIDEO CALL — WebRTC Mesh + Picture-in-Picture
 // ════════════════════════════════════════════════════
 
@@ -1938,6 +2283,7 @@ socket.on("hyperbeam:session", ({ embedUrl }) => {
     hyperbeamIframe.allow = "camera; microphone; fullscreen; autoplay";
     hyperbeamIframe.sandbox = "allow-same-origin allow-scripts allow-forms allow-popups allow-modals";
     hyperbeamContainer.appendChild(hyperbeamIframe);
+    hyperbeamFsBtn.classList.remove("hidden");
 });
 
 socket.on("hyperbeam:ended", () => {
@@ -1950,6 +2296,8 @@ socket.on("hyperbeam:ended", () => {
     startHyperbeamBtn.className = "hb-btn hb-start";
     hyperbeamStatusText.textContent = "⏹ Session ended";
     hyperbeamUrlInput.value = "";
+    hyperbeamFsBtn.classList.add("hidden");
+    if (document.fullscreenElement) document.exitFullscreen();
 });
 
 socket.on("hyperbeam:error", (msg) => {
@@ -1962,6 +2310,40 @@ socket.on("hyperbeam:error", (msg) => {
         startHyperbeamBtn.className = "hb-btn hb-start";
     }
 });
+
+// ── Hyperbeam Fullscreen ─────────────────────────
+const hyperbeamFsBtn = document.getElementById("hyperbeamFullscreenBtn");
+let hyperbeamFsActive = false;
+
+function updateHyperbeamFsBtn() {
+    hyperbeamFsBtn.textContent = hyperbeamFsActive ? "⧉" : "⛶";
+    hyperbeamFsBtn.title = hyperbeamFsActive ? "Exit full screen (F)" : "Full screen (F)";
+}
+
+hyperbeamFsBtn.addEventListener("click", () => {
+    if (!document.fullscreenElement) {
+        hyperbeamWrapper.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
+});
+
+document.addEventListener("fullscreenchange", () => {
+    hyperbeamFsActive = !!document.fullscreenElement;
+    updateHyperbeamFsBtn();
+});
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "f" || e.key === "F") {
+        const activeTag = document.activeElement?.tagName || "";
+        if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") return;
+        if (hyperbeamPanel.classList.contains("hidden")) return;
+        hyperbeamFsBtn.click();
+    }
+});
+
+// Expose fullscreen button visibility to existing event handlers
+// (hyperbeam:session shows it, hyperbeam:ended hides it)
 
 
 acceptCallBtn.addEventListener("click", () => {

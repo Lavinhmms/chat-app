@@ -8,6 +8,18 @@
 </head>
 <body>
 
+<!-- App Lock Screen -->
+<div class="lock-overlay" id="lockOverlay">
+    <div class="lock-card">
+        <div class="lock-icon">🔒</div>
+        <div class="lock-header">Huba Huba</div>
+        <div class="lock-sub">Application is locked. Enter password to unlock.</div>
+        <input id="lockPassword" class="lock-input" type="password" placeholder="Enter password" autocomplete="off" />
+        <button id="lockUnlockBtn" class="lock-btn">Unlock</button>
+        <div id="lockError" class="lock-error hidden">Incorrect password. Try again.</div>
+    </div>
+</div>
+
 <!-- Lobby -->
 <div class="lobby" id="lobby">
     <div class="lobby-card">
@@ -79,6 +91,7 @@
                 <button id="hamburger" class="hamburger" title="Menu">☰</button>
                 <button id="backBtn" class="back-btn hidden" title="Back to chat">←</button>
                 <h2 id="roomTitle">Huba Hmmss</h2>
+                <button id="voiceMicBtn" class="voice-mic-btn" title="Start voice call">🎙️</button>
             </div>
             <!-- Top right menu -->
             <div class="top-menu" id="topMenu">
@@ -198,6 +211,7 @@
                         <div class="hyperbeam-empty-sub">Admin: click "Start Co-Browse" to launch a shared browser. Everyone in the room will see the same screen.</div>
                     </div>
                     <div class="hyperbeam-container hidden" id="hyperbeamContainer"></div>
+                    <button class="hb-fullscreen-btn hidden" id="hyperbeamFullscreenBtn" title="Full screen (F)">⛶</button>
                 </div>
                 <div class="hyperbeam-status" id="hyperbeamStatus">
                     <span id="hyperbeamStatusText">No active session</span>
@@ -271,6 +285,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
 <script src="script.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
