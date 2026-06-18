@@ -131,11 +131,11 @@ const upload = multer({
     }
 });
 
-app.use(express.static("public"));
+const publicDir = path.join(__dirname, "public");
+app.use(express.static(publicDir));
 app.use("/uploads", (req, res, next) => {
-    res.setHeader("Content-Disposition", "attachment");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    express.static("uploads")(req, res, next);
+    express.static(uploadsDir)(req, res, next);
 });
 
 const GIPHY_API_KEY = process.env.GIPHY_KEY || "7ts8YUGRxPmmILiPdopADIpMekHL2Y4S";
@@ -196,9 +196,30 @@ app.post("/upload", upload.single("image"), (req, res) => {
 });
 
 const rooms = {};
+const roomDeletionTimers = {};
+const ROOM_GRACE_PERIOD = 60000; // 60 seconds before deleting empty rooms
 
 function getRoom(socket) {
     return rooms[socket.roomId];
+}
+
+function scheduleRoomDeletion(roomId) {
+    if (roomDeletionTimers[roomId]) return;
+    roomDeletionTimers[roomId] = setTimeout(() => {
+        const room = rooms[roomId];
+        if (room && Object.keys(room.users).length === 0) {
+            endHyperbeamSession(room);
+            delete rooms[roomId];
+        }
+        delete roomDeletionTimers[roomId];
+    }, ROOM_GRACE_PERIOD);
+}
+
+function cancelRoomDeletion(roomId) {
+    if (roomDeletionTimers[roomId]) {
+        clearTimeout(roomDeletionTimers[roomId]);
+        delete roomDeletionTimers[roomId];
+    }
 }
 
 function cleanupDisconnectedUsers(room) {
@@ -219,8 +240,7 @@ setInterval(() => {
         const room = rooms[roomId];
         cleanupDisconnectedUsers(room);
         if (Object.keys(room.users).length === 0) {
-            endHyperbeamSession(room);
-            delete rooms[roomId];
+            scheduleRoomDeletion(roomId);
         }
     });
 }, 10000);
@@ -267,6 +287,7 @@ io.on("connection", (socket) => {
                 return;
             }
         }
+        cancelRoomDeletion(roomId);
         if (!rooms[roomId]) {
             rooms[roomId] = {
                 users: {},
@@ -318,6 +339,7 @@ io.on("connection", (socket) => {
         if (!room) { socket.emit("auth:error", "Room not found"); return; }
         if (!username || username.length > MAX_USERNAME) return;
         if (room.roomPassword && password !== room.roomPassword) { socket.emit("auth:error", "Wrong password"); return; }
+        cancelRoomDeletion(roomId);
 
         socket.roomId = roomId;
         socket.join(roomId);
@@ -805,7 +827,7 @@ io.on("connection", (socket) => {
                 }
             }
             if (Object.keys(room.users).length === 0) {
-                delete rooms[roomId];
+                scheduleRoomDeletion(roomId);
             }
         }
         socket.leave(roomId);
@@ -818,6 +840,7 @@ io.on("connection", (socket) => {
         if (!room || !room.admins.has(socket.id)) return;
         io.to(socket.roomId).emit("room:ended");
         endHyperbeamSession(room);
+        cancelRoomDeletion(socket.roomId);
         Object.keys(room.users).forEach(id => {
             const s = io.sockets.sockets.get(id);
             if (s) s.disconnect(true);
@@ -860,7 +883,7 @@ io.on("connection", (socket) => {
             io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
         }
         if (Object.keys(room.users).length === 0) {
-            delete rooms[roomId];
+            scheduleRoomDeletion(roomId);
         }
     });
 });

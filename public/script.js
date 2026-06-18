@@ -10,34 +10,6 @@ let   userStatus    = "online";
 const REACT_EMOJIS = ["👍", "❤️", "😂", "😮"];
 const MORE_REACT_EMOJIS = ["😢","🙏","🔥","🎉","👏","💯","😡","🥺","😎","🤔","💔","✨","😴","🙌"];
 
-// ── App lock screen ──────────────────────────────
-const LOCK_HASH = "8480437abb0d9ee5acafe90e3d87983d27bbb4bcda551461c7dc29ad33f0c65e";
-const lockOverlay   = document.getElementById("lockOverlay");
-const lockPassword  = document.getElementById("lockPassword");
-const lockUnlockBtn = document.getElementById("lockUnlockBtn");
-const lockError     = document.getElementById("lockError");
-
-async function checkUnlock() {
-    const pw = lockPassword.value;
-    const enc = new TextEncoder();
-    const hash = await crypto.subtle.digest("SHA-256", enc.encode(pw));
-    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
-    if (hex === LOCK_HASH) {
-        lockOverlay.classList.add("hidden");
-        lockPassword.value = "";
-        lockError.classList.add("hidden");
-    } else {
-        lockError.classList.remove("hidden");
-        lockPassword.value = "";
-        lockPassword.focus();
-    }
-}
-
-lockUnlockBtn.addEventListener("click", checkUnlock);
-lockPassword.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") checkUnlock();
-});
-
 function generateMessageId() {
     return socket.id + "-" + Date.now();
 }
@@ -262,15 +234,15 @@ socket.on("disconnect", () => {
         if (disconnected) {
             disconnected = false;
             showReconnectingBanner(false);
-            goToLobby("Connection lost");
+            goToLobby("Connection lost - please rejoin");
         }
-    }, 10000);
+    }, 30000);
 });
 
 socket.on("connect", () => {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
-    if (disconnected && currentRoomId && username.value) {
+    if (currentRoomId && username.value) {
         disconnected = false;
         showReconnectingBanner(false);
         socket.emit("room:join", { roomId: currentRoomId, name: username.value, password: currentRoomPassword });
@@ -281,8 +253,6 @@ socket.on("connect", () => {
         socket.emit("room:leave", { roomId: lastRoomId });
         lastRoomId = null;
     }
-    if (!lobby.classList.contains("hidden")) return;
-    goToLobby("Reconnected");
 });
 
 function showReconnectingBanner(show) {
@@ -328,13 +298,17 @@ socket.on("auth:error", (msg) => {
     createRoomBtn.textContent = "Create Room";
     if (!lobby.classList.contains("hidden")) {
         showLobbyError(msg);
-        setTimeout(() => showLobbyError(""), 3000);
+        setTimeout(() => showLobbyError(""), 5000);
         return;
     }
     disconnected = false;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     showReconnectingBanner(false);
-    goToLobby(msg);
+    if (currentRoomId) {
+        lastRoomId = currentRoomId;
+        currentRoomId = null;
+    }
+    goToLobby("Disconnected: " + msg);
 });
 
 socket.on("auth:kicked", () => {
@@ -404,7 +378,7 @@ document.getElementById("themeToggle").addEventListener("click", () => {
 });
 
 // ── User status tracking ─────────────────────────
-const STATUS_EVENTS = ["mousemove", "keydown", "click", "touchstart", "focus"];
+const STATUS_EVENTS = ["keydown", "click", "touchstart", "focus"];
 function onUserActivity() {
     lastActivity = Date.now();
     if (userStatus !== "online") {
@@ -413,6 +387,12 @@ function onUserActivity() {
     }
 }
 STATUS_EVENTS.forEach(ev => document.addEventListener(ev, onUserActivity, { passive: true }));
+let mousemoveThrottle;
+document.addEventListener("mousemove", () => {
+    if (mousemoveThrottle) return;
+    mousemoveThrottle = setTimeout(() => { mousemoveThrottle = null; }, 300);
+    onUserActivity();
+}, { passive: true });
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
         userStatus = "away";
@@ -1783,7 +1763,7 @@ function startSpeakingDetection(stream) {
                 isCurrentlySpeaking = false;
                 socket.emit("voice:stopped-speaking");
             }
-        }, 150);
+        }, 300);
     } catch(e) {}
 }
 
