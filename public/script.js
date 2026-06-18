@@ -1,6 +1,7 @@
 const SERVER_URL    = "https://chat-app-dptb.onrender.com";
+function isCapacitor() { return !!(window.Capacitor && window.Capacitor.isNativePlatform); }
 const socket        = io(SERVER_URL, {
-    transports: ["polling", "websocket"],
+    transports: isCapacitor() ? ["websocket"] : ["polling", "websocket"],
     reconnectionDelay: 1000,
     reconnectionDelayMax: 10000,
     reconnectionAttempts: Infinity
@@ -9,7 +10,6 @@ const socket        = io(SERVER_URL, {
 // ── Background Audio (Capacitor Android foreground service) ──
 let backgroundMode  = false;
 const BgAudioPlugin = window.Capacitor?.Plugins?.BackgroundAudio || null;
-function isCapacitor() { return !!(window.Capacitor && window.Capacitor.isNativePlatform); }
 
 async function toggleBackgroundMode() {
     backgroundMode = !backgroundMode;
