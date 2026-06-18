@@ -20,7 +20,7 @@ async function toggleBackgroundMode() {
         if (isCapacitor() && BgAudioPlugin) {
             try {
                 await BgAudioPlugin.start();
-                await BgAudioPlugin.setPiPEnabled({ enabled: true });
+                await BgAudioPlugin.setEnabled({ enabled: true });
             } catch(e) { console.warn("BgAudio start:", e); }
         }
     } else {
@@ -28,7 +28,7 @@ async function toggleBackgroundMode() {
         btn.classList.remove("active");
         if (isCapacitor() && BgAudioPlugin) {
             try {
-                await BgAudioPlugin.setPiPEnabled({ enabled: false });
+                await BgAudioPlugin.setEnabled({ enabled: false });
                 await BgAudioPlugin.stop();
             } catch(e) { console.warn("BgAudio stop:", e); }
         }
@@ -1213,10 +1213,6 @@ if (isCapacitor() && CapacitorApp) {
                 const state = player.getPlayerState();
                 ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
                 if (ytWasPlaying) {
-                    // Try PiP first
-                    if (BgAudioPlugin && typeof BgAudioPlugin.enterPiP === 'function') {
-                        BgAudioPlugin.enterPiP().catch(() => {});
-                    }
                     startBgSilence();
                     startBgAudioCtx();
                     startBgKeepalive();
