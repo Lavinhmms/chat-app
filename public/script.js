@@ -18,13 +18,19 @@ async function toggleBackgroundMode() {
         btn.innerHTML = "🔊 Background Playback";
         btn.classList.add("active");
         if (isCapacitor() && BgAudioPlugin) {
-            try { await BgAudioPlugin.start(); } catch(e) { console.warn("BgAudio start:", e); }
+            try {
+                await BgAudioPlugin.start();
+                await BgAudioPlugin.setPiPEnabled({ enabled: true });
+            } catch(e) { console.warn("BgAudio start:", e); }
         }
     } else {
         btn.innerHTML = "🔇 Background Playback";
         btn.classList.remove("active");
         if (isCapacitor() && BgAudioPlugin) {
-            try { await BgAudioPlugin.stop(); } catch(e) { console.warn("BgAudio stop:", e); }
+            try {
+                await BgAudioPlugin.setPiPEnabled({ enabled: false });
+                await BgAudioPlugin.stop();
+            } catch(e) { console.warn("BgAudio stop:", e); }
         }
         stopBgKeepalive();
         stopBgSilence();
@@ -1141,14 +1147,47 @@ function stopBgSilence() {
 }
 
 // ── Background keepalive ──
+let _bgOverrideHidden = false;
+(function overrideVisibility() {
+    try {
+        const docProto = Document.prototype;
+        const hiddenDesc = Object.getOwnPropertyDescriptor(docProto, 'hidden');
+        const visDesc = Object.getOwnPropertyDescriptor(docProto, 'visibilityState');
+        if (hiddenDesc) {
+            Object.defineProperty(document, 'hidden', {
+                get: () => _bgOverrideHidden ? false : hiddenDesc.get.call(document),
+                configurable: true
+            });
+        }
+        if (visDesc) {
+            Object.defineProperty(document, 'visibilityState', {
+                get: () => _bgOverrideHidden ? 'visible' : visDesc.get.call(document),
+                configurable: true
+            });
+        }
+    } catch(e) { /* not supported */ }
+})();
+
+function resumeYouTube() {
+    if (!player || !playerReady) return;
+    try {
+        const state = player.getPlayerState();
+        if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.CUED) {
+            player.mute();
+            player.playVideo();
+            setTimeout(() => {
+                if (player && playerReady) player.unMute();
+            }, 600);
+        }
+    } catch(e) { /* silent */ }
+}
+
 function startBgKeepalive() {
+    _bgOverrideHidden = true;
     if (bgKeepaliveInterval) return;
     bgKeepaliveInterval = setInterval(() => {
         if (!backgroundMode || !player || !playerReady) return;
-        const state = player.getPlayerState();
-        if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.CUED) {
-            try { player.playVideo(); } catch(e) {}
-        }
+        resumeYouTube();
         if (bgSilenceCtx && bgSilenceCtx.state === "suspended") {
             try { bgSilenceCtx.resume(); } catch(e) {}
         }
@@ -1158,6 +1197,7 @@ function startBgKeepalive() {
     }, 2000);
 }
 function stopBgKeepalive() {
+    _bgOverrideHidden = false;
     if (bgKeepaliveInterval) {
         clearInterval(bgKeepaliveInterval);
         bgKeepaliveInterval = null;
