@@ -26,7 +26,9 @@ async function toggleBackgroundMode() {
         if (isCapacitor() && BgAudioPlugin) {
             try { await BgAudioPlugin.stop(); } catch(e) { console.warn("BgAudio stop:", e); }
         }
+        stopBgKeepalive();
         stopBgSilence();
+        stopBgAudioCtx();
     }
 }
 const form          = document.getElementById("form");
@@ -1067,11 +1069,9 @@ document.addEventListener("paste", (e) => {
 
 
 
-// ── Picture-in-Picture Background Playback ──────
-let pipVideo = null;
-let pipActive = false;
-let pipLeaveTime = 0;
+// ── Background Audio (Android Foreground Service) ──
 let ytWasPlaying = false;
+let bgKeepaliveInterval = null;
 let bgAudioCtx = null;
 
 function startBgAudioCtx() {
@@ -1092,20 +1092,6 @@ function stopBgAudioCtx() {
     }
 }
 
-function isPipSupported() {
-    return 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
-}
-
-async function enterPip(videoId, currentTime) {
-    // PiP background playback disabled - YouTube blocks direct streaming
-    // Main YouTube IFrame player handles playback in the foreground
-    console.warn("PiP background playback unavailable");
-}
-
-async function exitPip() {
-    return null;
-}
-
 function updateMediaSession(title) {
     if (!("mediaSession" in navigator)) return;
     try {
@@ -1114,63 +1100,126 @@ function updateMediaSession(title) {
             artist: "Watch Together",
         });
         navigator.mediaSession.setActionHandler("play", () => {
-            if (pipActive && pipVideo) { pipVideo.play(); }
-            else if (player && playerReady) { player.playVideo(); }
+            if (player && playerReady) { player.playVideo(); }
         });
         navigator.mediaSession.setActionHandler("pause", () => {
-            if (pipActive && pipVideo) { pipVideo.pause(); }
-            else if (player && playerReady) { player.pauseVideo(); }
+            if (player && playerReady) { player.pauseVideo(); }
         });
     } catch(e) {}
 }
 
-let bgSilenceInterval = null;
+// ── Silence generator ──
+let bgSilenceSource = null;
+let bgSilenceCtx = null;
 function startBgSilence() {
-    if (bgSilenceInterval) return;
+    if (bgSilenceSource) return;
     try {
-        const ctx = audioCtx;
-        if (ctx.state === "suspended") ctx.resume();
-        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
-        const src = ctx.createBufferSource();
+        bgSilenceCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (bgSilenceCtx.state === "suspended") bgSilenceCtx.resume();
+        const buf = bgSilenceCtx.createBuffer(1, bgSilenceCtx.sampleRate * 0.1, bgSilenceCtx.sampleRate);
+        const src = bgSilenceCtx.createBufferSource();
         src.buffer = buf;
         src.loop = true;
-        const gain = ctx.createGain();
+        const gain = bgSilenceCtx.createGain();
         gain.gain.value = 0;
-        src.connect(gain).connect(ctx.destination);
+        src.connect(gain).connect(bgSilenceCtx.destination);
         src.start();
-        bgSilenceInterval = setInterval(() => {
-            if (src.playbackState === 0) {
-                clearInterval(bgSilenceInterval);
-                bgSilenceInterval = null;
-            }
-        }, 10000);
+        bgSilenceSource = src;
     } catch(e) { /* silent */ }
 }
 function stopBgSilence() {
-    if (bgSilenceInterval) {
-        clearInterval(bgSilenceInterval);
-        bgSilenceInterval = null;
+    try {
+        if (bgSilenceSource) {
+            bgSilenceSource.stop();
+            bgSilenceSource = null;
+        }
+        if (bgSilenceCtx) {
+            bgSilenceCtx.close();
+            bgSilenceCtx = null;
+        }
+    } catch(e) { /* silent */ }
+}
+
+// ── Background keepalive ──
+function startBgKeepalive() {
+    if (bgKeepaliveInterval) return;
+    bgKeepaliveInterval = setInterval(() => {
+        if (!backgroundMode || !player || !playerReady) return;
+        const state = player.getPlayerState();
+        if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.CUED) {
+            try { player.playVideo(); } catch(e) {}
+        }
+        if (bgSilenceCtx && bgSilenceCtx.state === "suspended") {
+            try { bgSilenceCtx.resume(); } catch(e) {}
+        }
+        if (bgAudioCtx && bgAudioCtx.state === "suspended") {
+            try { bgAudioCtx.resume(); } catch(e) {}
+        }
+    }, 2000);
+}
+function stopBgKeepalive() {
+    if (bgKeepaliveInterval) {
+        clearInterval(bgKeepaliveInterval);
+        bgKeepaliveInterval = null;
     }
 }
 
-document.addEventListener("visibilitychange", async () => {
+// ── Capacitor lifecycle (more reliable than visibilitychange) ──
+const CapacitorApp = window.Capacitor?.Plugins?.App || null;
+if (isCapacitor() && CapacitorApp) {
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+        if (!isActive) {
+            if (player && playerReady && backgroundMode) {
+                const state = player.getPlayerState();
+                ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
+                if (ytWasPlaying) {
+                    startBgSilence();
+                    startBgAudioCtx();
+                    startBgKeepalive();
+                    setTimeout(() => {
+                        if (player && playerReady) {
+                            try { player.playVideo(); } catch(e) {}
+                        }
+                    }, 200);
+                }
+            }
+        } else {
+            stopBgKeepalive();
+            stopBgSilence();
+            stopBgAudioCtx();
+            if (player && playerReady) {
+                if (ytWasPlaying && player.getPlayerState() !== YT.PlayerState.PLAYING) {
+                    setPendingRemotePlay();
+                    player.playVideo();
+                }
+            }
+            ytWasPlaying = false;
+        }
+    });
+}
+
+// ── Fallback visibilitychange for browser ──
+document.addEventListener("visibilitychange", () => {
+    if (isCapacitor()) return; // Capacitor handles this via appStateChange
     if (document.hidden) {
-        if (player && playerReady) {
+        if (player && playerReady && backgroundMode) {
             const state = player.getPlayerState();
             ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
-            if (ytWasPlaying && backgroundMode) {
+            if (ytWasPlaying) {
+                startBgSilence();
+                startBgAudioCtx();
+                startBgKeepalive();
                 setTimeout(() => {
-                    if (player && playerReady && document.hidden) {
+                    if (player && playerReady) {
                         try { player.playVideo(); } catch(e) {}
                     }
-                }, 100);
-                startBgSilence();
+                }, 200);
             }
         }
-        startBgAudioCtx();
     } else {
-        stopBgAudioCtx();
+        stopBgKeepalive();
         stopBgSilence();
+        stopBgAudioCtx();
         if (player && playerReady) {
             if (ytWasPlaying && player.getPlayerState() !== YT.PlayerState.PLAYING) {
                 setPendingRemotePlay();
