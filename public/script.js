@@ -1,4 +1,4 @@
-const socket        = io();
+const socket        = io("https://chat-app-dptb.onrender.com");
 const form          = document.getElementById("form");
 const input         = document.getElementById("input");
 const username      = document.getElementById("username");
@@ -2828,5 +2828,7 @@ socket.on("call:rejected", ({ socketId, username: name }) => {
     joinCallBtn.textContent = "❌ " + name + " declined";
     setTimeout(() => { if (isCalling) cancelCall(); }, 2000);
 });
+
+
 
 

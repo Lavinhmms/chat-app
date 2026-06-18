@@ -6,7 +6,6 @@ const multer     = require("multer");
 const path       = require("path");
 const fs         = require("fs");
 const https      = require("https");
-
 const app    = express();
 const server = http.createServer(app);
 
@@ -20,7 +19,9 @@ app.use((req, res, next) => {
     next();
 });
 
-const ALLOWED_ORIGIN = process.env.ORIGIN || "http://localhost:3000";
+const ALLOWED_ORIGIN = process.env.ORIGIN
+    ? process.env.ORIGIN.split(",").map(s => s.trim())
+    : ["http://localhost:3000", "capacitor://localhost", "http://localhost"];
 const io     = new Server(server, {
     cors: {
         origin: ALLOWED_ORIGIN,
