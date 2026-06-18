@@ -1213,6 +1213,10 @@ if (isCapacitor() && CapacitorApp) {
                 const state = player.getPlayerState();
                 ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
                 if (ytWasPlaying) {
+                    // Try PiP first
+                    if (BgAudioPlugin && typeof BgAudioPlugin.enterPiP === 'function') {
+                        BgAudioPlugin.enterPiP().catch(() => {});
+                    }
                     startBgSilence();
                     startBgAudioCtx();
                     startBgKeepalive();
