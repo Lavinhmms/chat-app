@@ -1,6 +1,6 @@
 const SERVER_URL    = "https://chat-app-dptb.onrender.com";
 const socket        = io(SERVER_URL, {
-    transports: ["websocket"],
+    transports: ["polling", "websocket"],
     reconnectionDelay: 1000,
     reconnectionDelayMax: 10000,
     reconnectionAttempts: Infinity
