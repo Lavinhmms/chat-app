@@ -1,4 +1,5 @@
-const socket        = io("https://chat-app-dptb.onrender.com", { transports: ["websocket"] });
+const SERVER_URL    = "https://chat-app-dptb.onrender.com";
+const socket        = io(SERVER_URL, { transports: ["websocket"] });
 const form          = document.getElementById("form");
 const input         = document.getElementById("input");
 const username      = document.getElementById("username");
@@ -830,7 +831,7 @@ function toggleGifPicker(picker, searchInput, resultsEl) {
 function searchGiphy(query, resultsEl) {
     resultsEl.innerHTML = '<div class="gif-loading">Searching...</div>';
     resultsEl.classList.remove("gif-results-empty");
-    fetch("/api/gif-search?q=" + encodeURIComponent(query))
+    fetch(SERVER_URL + "/api/gif-search?q=" + encodeURIComponent(query))
         .then(r => r.json())
         .then(data => {
             resultsEl.innerHTML = "";
@@ -931,7 +932,7 @@ function uploadImage(file) {
     if (!file) return;
     const formData = new FormData();
     formData.append("image", file);
-    return fetch("/upload", { method: "POST", body: formData })
+    return fetch(SERVER_URL + "/upload", { method: "POST", body: formData })
         .then(r => r.json())
         .then(data => data.url || null)
         .catch(() => null);
