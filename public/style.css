@@ -91,6 +91,13 @@ body.light { background: #f1f5f9; color: #111827; }
 
 .app.hidden { display: none; }
 
+.lobby-conn {
+    font-size: 11px; color: rgba(255,255,255,0.3);
+    text-align: center; padding: 2px 0;
+}
+.lobby-conn.connected { color: #4ade80; }
+.lobby-conn.error { color: #f87171; }
+
 /* APP */
 .app {
     display: flex;

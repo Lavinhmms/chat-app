@@ -10,6 +10,21 @@ let   userStatus    = "online";
 const REACT_EMOJIS = ["👍", "❤️", "😂", "😮"];
 const MORE_REACT_EMOJIS = ["😢","🙏","🔥","🎉","👏","💯","😡","🥺","😎","🤔","💔","✨","😴","🙌"];
 
+const connStatus = document.getElementById("connStatus");
+socket.on("connect", () => {
+    connStatus.textContent = "✓ Connected to server";
+    connStatus.className = "lobby-conn connected";
+});
+socket.on("connect_error", (err) => {
+    connStatus.textContent = "✗ Connection error: " + err.message;
+    connStatus.className = "lobby-conn error";
+    console.error("Socket connect_error:", err);
+});
+socket.on("disconnect", (reason) => {
+    connStatus.textContent = "Disconnected: " + reason;
+    connStatus.className = "lobby-conn error";
+});
+
 function generateMessageId() {
     return socket.id + "-" + Date.now();
 }
