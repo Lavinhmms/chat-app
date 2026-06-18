@@ -1111,6 +1111,24 @@ body.light .hyperbeam-item {
 body.dark  .hyperbeam-item:hover  { background: rgba(22,163,74,0.45); }
 body.light .hyperbeam-item:hover  { background: rgba(22,163,74,0.25); }
 
+/* Background Audio dropdown item */
+body.dark  .bg-audio-item {
+    background: rgba(234,179,8,0.25);
+    color: white;
+}
+body.light .bg-audio-item {
+    background: rgba(234,179,8,0.12);
+    color: #713f12;
+}
+body.dark  .bg-audio-item:hover  { background: rgba(234,179,8,0.45); }
+body.light .bg-audio-item:hover  { background: rgba(234,179,8,0.25); }
+body.dark  .bg-audio-item.active {
+    background: rgba(234,179,8,0.5); color: #fef08a;
+}
+body.light .bg-audio-item.active {
+    background: rgba(234,179,8,0.3); color: #854d0e;
+}
+
 @media (max-width: 768px) {
     .hyperbeam-toolbar { flex-wrap: wrap; padding: 4px 8px; gap: 4px; }
     .hb-btn { height: 28px; font-size: 11px; padding: 0 8px; }

@@ -1,5 +1,29 @@
 const SERVER_URL    = "https://chat-app-dptb.onrender.com";
 const socket        = io(SERVER_URL, { transports: ["websocket"] });
+
+// ── Background Audio (Capacitor Android foreground service) ──
+let backgroundMode  = false;
+const BgAudioPlugin = window.Capacitor?.Plugins?.BackgroundAudio || null;
+function isCapacitor() { return !!(window.Capacitor && window.Capacitor.isNativePlatform); }
+
+async function toggleBackgroundMode() {
+    backgroundMode = !backgroundMode;
+    const btn = document.getElementById("bgAudioBtn");
+    if (backgroundMode) {
+        btn.innerHTML = "🔊 Background Playback";
+        btn.classList.add("active");
+        if (isCapacitor() && BgAudioPlugin) {
+            try { await BgAudioPlugin.start(); } catch(e) { console.warn("BgAudio start:", e); }
+        }
+    } else {
+        btn.innerHTML = "🔇 Background Playback";
+        btn.classList.remove("active");
+        if (isCapacitor() && BgAudioPlugin) {
+            try { await BgAudioPlugin.stop(); } catch(e) { console.warn("BgAudio stop:", e); }
+        }
+        stopBgSilence();
+    }
+}
 const form          = document.getElementById("form");
 const input         = document.getElementById("input");
 const username      = document.getElementById("username");
@@ -1084,36 +1108,57 @@ function updateMediaSession(title) {
     } catch(e) {}
 }
 
+let bgSilenceInterval = null;
+function startBgSilence() {
+    if (bgSilenceInterval) return;
+    try {
+        const ctx = audioCtx;
+        if (ctx.state === "suspended") ctx.resume();
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        src.connect(gain).connect(ctx.destination);
+        src.start();
+        bgSilenceInterval = setInterval(() => {
+            if (src.playbackState === 0) {
+                clearInterval(bgSilenceInterval);
+                bgSilenceInterval = null;
+            }
+        }, 10000);
+    } catch(e) { /* silent */ }
+}
+function stopBgSilence() {
+    if (bgSilenceInterval) {
+        clearInterval(bgSilenceInterval);
+        bgSilenceInterval = null;
+    }
+}
+
 document.addEventListener("visibilitychange", async () => {
     if (document.hidden) {
         if (player && playerReady) {
             const state = player.getPlayerState();
             ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
-            if (ytWasPlaying) {
-                const ct = player.getCurrentTime();
-                enterPip(currentVideoId, ct);
+            if (ytWasPlaying && backgroundMode) {
+                setTimeout(() => {
+                    if (player && playerReady && document.hidden) {
+                        try { player.playVideo(); } catch(e) {}
+                    }
+                }, 100);
+                startBgSilence();
             }
         }
         startBgAudioCtx();
     } else {
         stopBgAudioCtx();
-        const time = await exitPip();
+        stopBgSilence();
         if (player && playerReady) {
-            if (time != null) {
-                stopSyncInterval();
-                player.seekTo(time, true);
-            }
             if (ytWasPlaying && player.getPlayerState() !== YT.PlayerState.PLAYING) {
                 setPendingRemotePlay();
                 player.playVideo();
-            }
-            if (time != null) {
-                setTimeout(() => {
-                    if (player && playerReady && player.getPlayerState() === YT.PlayerState.PLAYING) {
-                        startSyncInterval();
-                        socket.emit("video:sync", time);
-                    }
-                }, 500);
             }
         }
         ytWasPlaying = false;
@@ -2082,6 +2127,13 @@ topMenuBtn.addEventListener("click", (e) => {
 document.addEventListener("click", (e) => {
     if (!topMenuDropdown.contains(e.target) && e.target !== topMenuBtn)
         topMenuDropdown.classList.add("hidden");
+});
+
+// ── Background audio toggle ───────────────────────
+const bgAudioBtn = document.getElementById("bgAudioBtn");
+bgAudioBtn.addEventListener("click", () => {
+    topMenuDropdown.classList.add("hidden");
+    toggleBackgroundMode();
 });
 
 // ── Toggle call panel ─────────────────────────────
