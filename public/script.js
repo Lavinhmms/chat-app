@@ -1,6 +1,6 @@
 const SERVER_URL    = "https://chat-app-dptb.onrender.com";
 const socket        = io(SERVER_URL, {
-    transports: ["polling", "websocket"],
+    transports: ["websocket"],
     reconnectionDelay: 1000,
     reconnectionDelayMax: 10000,
     reconnectionAttempts: Infinity
@@ -49,6 +49,13 @@ socket.on("connect_error", (err) => {
     connStatus.textContent = "✗ Connection error: " + err.message;
     connStatus.className = "lobby-conn error";
     console.error("Socket connect_error:", err);
+    // Reset create button if it was stuck waiting
+    createRoomBtn.disabled = false;
+    createRoomBtn.textContent = "Create Room";
+    if (err.message === "xhr poll error") {
+        showLobbyError("Server unreachable — it may be waking up from sleep, try again in a moment");
+        setTimeout(() => showLobbyError(""), 6000);
+    }
 });
 socket.on("disconnect", (reason) => {
     connStatus.textContent = "Disconnected: " + reason;
@@ -105,6 +112,10 @@ document.querySelectorAll(".lobby-tab").forEach(tab => {
 
 // ── Create room ──
 createRoomBtn.addEventListener("click", () => {
+    if (!socket.connected) {
+        showLobbyError("Not connected to server — wait for connection");
+        return;
+    }
     const name = lobbyName.value.trim();
     const roomName = createRoomName.value.trim();
     if (!name) { showLobbyError("Enter your name"); return; }
