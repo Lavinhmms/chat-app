@@ -198,7 +198,7 @@ app.post("/upload", upload.single("image"), (req, res) => {
 
 const rooms = {};
 const roomDeletionTimers = {};
-const ROOM_GRACE_PERIOD = 60000; // 60 seconds before deleting empty rooms
+const ROOM_GRACE_PERIOD = 300000; // 5 minutes before deleting empty rooms
 
 function getRoom(socket) {
     return rooms[socket.roomId];
@@ -283,9 +283,22 @@ io.on("connection", (socket) => {
         if (password && typeof password === "string" && password.length > MAX_PASSWORD) return;
         if (rooms[roomId]) {
             cleanupDisconnectedUsers(rooms[roomId]);
-            if (Object.keys(rooms[roomId].users).length > 0) {
+            const existingUsers = rooms[roomId].users;
+            const existingKeys = Object.keys(existingUsers);
+            // Allow reclaim if same username was in this room
+            const reclaim = existingKeys.some(id => existingUsers[id] === username);
+            if (existingKeys.length > 0 && !reclaim) {
                 socket.emit("auth:error", "Room name is taken");
                 return;
+            }
+            if (reclaim) {
+                // Remove old socket entries for this username
+                for (const id of existingKeys) {
+                    if (existingUsers[id] === username) {
+                        rooms[roomId].admins.delete(id);
+                        delete existingUsers[id];
+                    }
+                }
             }
         }
         cancelRoomDeletion(roomId);
@@ -341,6 +354,19 @@ io.on("connection", (socket) => {
         if (!username || username.length > MAX_USERNAME) return;
         if (room.roomPassword && password !== room.roomPassword) { socket.emit("auth:error", "Wrong password"); return; }
         cancelRoomDeletion(roomId);
+
+        // Handle reconnection: remove previous entry for same username
+        if (room._disconnectedAt && room._disconnectedAt[username]) {
+            delete room._disconnectedAt[username];
+        }
+        const prevId = Object.keys(room.users).find(id => room.users[id] === username);
+        if (prevId) {
+            room.admins.delete(prevId);
+            delete room.users[prevId];
+            if (room.userStatus && room.userStatus[prevId]) delete room.userStatus[prevId];
+            if (room.callUsers && room.callUsers[prevId]) delete room.callUsers[prevId];
+            if (room.voiceUsers && room.voiceUsers[prevId]) delete room.voiceUsers[prevId];
+        }
 
         socket.roomId = roomId;
         socket.join(roomId);
@@ -855,37 +881,50 @@ io.on("connection", (socket) => {
         const room = rooms[roomId];
         if (!room) return;
 
-        const wasAdmin = room.admins.has(socket.id);
-        if (wasAdmin) room.admins.delete(socket.id);
-        delete room.users[socket.id];
-        if (room.userStatus && room.userStatus[socket.id]) {
-            delete room.userStatus[socket.id];
-            socket.to(roomId).emit("user:status-update", { socketId: socket.id, status: "offline" });
-        }
-        if (room.callUsers[socket.id]) {
-            delete room.callUsers[socket.id];
-            socket.to(roomId).emit("call:user-left", socket.id);
-            socket.to(roomId).emit("call:canceled");
-            io.to(roomId).emit("call:participants", Object.keys(room.callUsers).length);
-        }
-        if (room.voiceUsers && room.voiceUsers[socket.id]) {
-            delete room.voiceUsers[socket.id];
-            socket.to(roomId).emit("voice:user-left", socket.id);
-            io.to(roomId).emit("voice:participants", Object.keys(room.voiceUsers).length);
-            if (Object.keys(room.voiceUsers).length === 0) {
-                room.voiceActive = false;
-                io.to(roomId).emit("voice:ended");
+        // Don't remove user immediately - allow 120s for reconnection
+        const username = room.users[socket.id];
+        if (!username) return;
+        
+        room._disconnectedAt = room._disconnectedAt || {};
+        room._disconnectedAt[username] = Date.now();
+        
+        setTimeout(() => {
+            if (!room.users[socket.id]) return; // already reconnected
+            if (!room._disconnectedAt || !room._disconnectedAt[username]) return;
+            
+            const wasAdmin = room.admins.has(socket.id);
+            if (wasAdmin) room.admins.delete(socket.id);
+            delete room.users[socket.id];
+            if (room.userStatus && room.userStatus[socket.id]) {
+                delete room.userStatus[socket.id];
+                socket.to(roomId).emit("user:status-update", { socketId: socket.id, status: "offline" });
             }
-        }
-        io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
-        if (!room.admins.size && Object.keys(room.users).length > 0) {
-            room.admins.add(Object.keys(room.users)[0]);
-            io.to(Object.keys(room.users)[0]).emit("auth:status", { hasPassword: !!room.roomPassword, isAdmin: true });
+            if (room.callUsers[socket.id]) {
+                delete room.callUsers[socket.id];
+                socket.to(roomId).emit("call:user-left", socket.id);
+                socket.to(roomId).emit("call:canceled");
+                io.to(roomId).emit("call:participants", Object.keys(room.callUsers).length);
+            }
+            if (room.voiceUsers && room.voiceUsers[socket.id]) {
+                delete room.voiceUsers[socket.id];
+                socket.to(roomId).emit("voice:user-left", socket.id);
+                io.to(roomId).emit("voice:participants", Object.keys(room.voiceUsers).length);
+                if (Object.keys(room.voiceUsers).length === 0) {
+                    room.voiceActive = false;
+                    io.to(roomId).emit("voice:ended");
+                }
+            }
+            delete room._disconnectedAt[username];
             io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
-        }
-        if (Object.keys(room.users).length === 0) {
-            scheduleRoomDeletion(roomId);
-        }
+            if (!room.admins.size && Object.keys(room.users).length > 0) {
+                room.admins.add(Object.keys(room.users)[0]);
+                io.to(Object.keys(room.users)[0]).emit("auth:status", { hasPassword: !!room.roomPassword, isAdmin: true });
+                io.to(roomId).emit("users", Object.entries(room.users).map(([id, name]) => ({ id, username: name })));
+            }
+            if (Object.keys(room.users).length === 0) {
+                scheduleRoomDeletion(roomId);
+            }
+        }, 120000);
     });
 });
 

@@ -1,5 +1,10 @@
 const SERVER_URL    = "https://chat-app-dptb.onrender.com";
-const socket        = io(SERVER_URL, { transports: ["websocket"] });
+const socket        = io(SERVER_URL, {
+    transports: ["polling", "websocket"],
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 10000,
+    reconnectionAttempts: Infinity
+});
 
 // ── Background Audio (Capacitor Android foreground service) ──
 let backgroundMode  = false;
