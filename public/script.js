@@ -1,4 +1,4 @@
-const socket        = io("https://chat-app-dptb.onrender.com");
+const socket        = io("https://chat-app-dptb.onrender.com", { transports: ["websocket"] });
 const form          = document.getElementById("form");
 const input         = document.getElementById("input");
 const username      = document.getElementById("username");
