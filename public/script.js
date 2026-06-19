@@ -7,36 +7,7 @@ const socket        = io(SERVER_URL, {
     reconnectionAttempts: Infinity
 });
 
-// ── Background Audio (Capacitor Android foreground service) ──
-let backgroundMode  = false;
-const BgAudioPlugin = window.Capacitor?.Plugins?.BackgroundAudio || null;
 
-async function toggleBackgroundMode() {
-    backgroundMode = !backgroundMode;
-    const btn = document.getElementById("bgAudioBtn");
-    if (backgroundMode) {
-        btn.innerHTML = "🔊 Background Playback";
-        btn.classList.add("active");
-        if (isCapacitor() && BgAudioPlugin) {
-            try {
-                await BgAudioPlugin.start();
-                await BgAudioPlugin.setEnabled({ enabled: true });
-            } catch(e) { console.warn("BgAudio start:", e); }
-        }
-    } else {
-        btn.innerHTML = "🔇 Background Playback";
-        btn.classList.remove("active");
-        if (isCapacitor() && BgAudioPlugin) {
-            try {
-                await BgAudioPlugin.setEnabled({ enabled: false });
-                await BgAudioPlugin.stop();
-            } catch(e) { console.warn("BgAudio stop:", e); }
-        }
-        stopBgKeepalive();
-        stopBgSilence();
-        stopBgAudioCtx();
-    }
-}
 const form          = document.getElementById("form");
 const input         = document.getElementById("input");
 const username      = document.getElementById("username");
@@ -1075,29 +1046,6 @@ document.addEventListener("paste", (e) => {
 
 
 
-// ── Background Audio (Android Foreground Service) ──
-let ytWasPlaying = false;
-let bgKeepaliveInterval = null;
-let bgAudioCtx = null;
-
-function startBgAudioCtx() {
-    if (bgAudioCtx) return;
-    try {
-        bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = bgAudioCtx.createOscillator();
-        const gain = bgAudioCtx.createGain();
-        gain.gain.value = 0;
-        osc.connect(gain).connect(bgAudioCtx.destination);
-        osc.start();
-    } catch(e) { /* silent */ }
-}
-function stopBgAudioCtx() {
-    if (bgAudioCtx) {
-        try { bgAudioCtx.close(); } catch(e) {}
-        bgAudioCtx = null;
-    }
-}
-
 function updateMediaSession(title) {
     if (!("mediaSession" in navigator)) return;
     try {
@@ -1113,149 +1061,6 @@ function updateMediaSession(title) {
         });
     } catch(e) {}
 }
-
-// ── Silence generator ──
-let bgSilenceSource = null;
-let bgSilenceCtx = null;
-function startBgSilence() {
-    if (bgSilenceSource) return;
-    try {
-        bgSilenceCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (bgSilenceCtx.state === "suspended") bgSilenceCtx.resume();
-        const buf = bgSilenceCtx.createBuffer(1, bgSilenceCtx.sampleRate * 0.1, bgSilenceCtx.sampleRate);
-        const src = bgSilenceCtx.createBufferSource();
-        src.buffer = buf;
-        src.loop = true;
-        const gain = bgSilenceCtx.createGain();
-        gain.gain.value = 0;
-        src.connect(gain).connect(bgSilenceCtx.destination);
-        src.start();
-        bgSilenceSource = src;
-    } catch(e) { /* silent */ }
-}
-function stopBgSilence() {
-    try {
-        if (bgSilenceSource) {
-            bgSilenceSource.stop();
-            bgSilenceSource = null;
-        }
-        if (bgSilenceCtx) {
-            bgSilenceCtx.close();
-            bgSilenceCtx = null;
-        }
-    } catch(e) { /* silent */ }
-}
-
-// ── Background keepalive ──
-let _bgOverrideHidden = false;
-(function overrideVisibility() {
-    try {
-        const docProto = Document.prototype;
-        const hiddenDesc = Object.getOwnPropertyDescriptor(docProto, 'hidden');
-        const visDesc = Object.getOwnPropertyDescriptor(docProto, 'visibilityState');
-        if (hiddenDesc) {
-            Object.defineProperty(document, 'hidden', {
-                get: () => _bgOverrideHidden ? false : hiddenDesc.get.call(document),
-                configurable: true
-            });
-        }
-        if (visDesc) {
-            Object.defineProperty(document, 'visibilityState', {
-                get: () => _bgOverrideHidden ? 'visible' : visDesc.get.call(document),
-                configurable: true
-            });
-        }
-    } catch(e) { /* not supported */ }
-})();
-
-function resumeYouTube() {
-    if (!player || !playerReady) return;
-    try {
-        const state = player.getPlayerState();
-        if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.CUED) {
-            player.mute();
-            player.playVideo();
-            setTimeout(() => {
-                if (player && playerReady) player.unMute();
-            }, 600);
-        }
-    } catch(e) { /* silent */ }
-}
-
-function startBgKeepalive() {
-    _bgOverrideHidden = true;
-    if (bgKeepaliveInterval) return;
-    bgKeepaliveInterval = setInterval(() => {
-        if (!backgroundMode || !player || !playerReady) return;
-        resumeYouTube();
-        if (bgSilenceCtx && bgSilenceCtx.state === "suspended") {
-            try { bgSilenceCtx.resume(); } catch(e) {}
-        }
-        if (bgAudioCtx && bgAudioCtx.state === "suspended") {
-            try { bgAudioCtx.resume(); } catch(e) {}
-        }
-    }, 2000);
-}
-function stopBgKeepalive() {
-    _bgOverrideHidden = false;
-    if (bgKeepaliveInterval) {
-        clearInterval(bgKeepaliveInterval);
-        bgKeepaliveInterval = null;
-    }
-}
-
-// ── Capacitor lifecycle — open native YouTube app if background mode enabled ──
-const CapacitorApp = window.Capacitor?.Plugins?.App || null;
-if (isCapacitor() && CapacitorApp) {
-    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-        if (!isActive) {
-            if (backgroundMode && currentVideoId) {
-                // Open native YouTube app which supports background playback
-                if (BgAudioPlugin && typeof BgAudioPlugin.openInYouTubeApp === "function") {
-                    BgAudioPlugin.openInYouTubeApp({ videoId: currentVideoId });
-                }
-            }
-            stopBgKeepalive();
-            stopBgSilence();
-            stopBgAudioCtx();
-            ytWasPlaying = false;
-        } else {
-            ytWasPlaying = false;
-        }
-    });
-}
-
-// ── Fallback visibilitychange for browser ──
-document.addEventListener("visibilitychange", () => {
-    if (isCapacitor()) return; // Capacitor handles this via appStateChange
-    if (document.hidden) {
-        if (player && playerReady && backgroundMode) {
-            const state = player.getPlayerState();
-            ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
-            if (ytWasPlaying) {
-                startBgSilence();
-                startBgAudioCtx();
-                startBgKeepalive();
-                setTimeout(() => {
-                    if (player && playerReady) {
-                        try { player.playVideo(); } catch(e) {}
-                    }
-                }, 200);
-            }
-        }
-    } else {
-        stopBgKeepalive();
-        stopBgSilence();
-        stopBgAudioCtx();
-        if (player && playerReady) {
-            if (ytWasPlaying && player.getPlayerState() !== YT.PlayerState.PLAYING) {
-                setPendingRemotePlay();
-                player.playVideo();
-            }
-        }
-        ytWasPlaying = false;
-    }
-});
 
 // ── YouTube Player ────────────────────────────────
 let player           = null;
@@ -2221,12 +2026,7 @@ document.addEventListener("click", (e) => {
         topMenuDropdown.classList.add("hidden");
 });
 
-// ── Background audio toggle ───────────────────────
-const bgAudioBtn = document.getElementById("bgAudioBtn");
-bgAudioBtn.addEventListener("click", () => {
-    topMenuDropdown.classList.add("hidden");
-    toggleBackgroundMode();
-});
+
 
 // ── Toggle call panel ─────────────────────────────
 const callBtn = document.getElementById("callBtn");

@@ -18,7 +18,7 @@
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
             android:exported="true"
-            android:supportsPictureInPicture="true">
+            >
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -37,17 +37,10 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <service
-            android:name=".BackgroundAudioService"
-            android:foregroundServiceType="mediaPlayback"
-            android:exported="false" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.PICTURE_IN_PICTURE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 </manifest>
