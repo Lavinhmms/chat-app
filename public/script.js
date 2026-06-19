@@ -610,9 +610,23 @@ function appendMessage(data, container) {
     else if (container === chat) playNotification();
     if (data.id) div.dataset.id = data.id;
     let html = "<strong>" + DOMPurify.sanitize(data.user) + "</strong>" + DOMPurify.sanitize(data.msg);
-    if (data.image) html += '<img class="message-media" src="' + DOMPurify.sanitize(data.image) + '" onclick="window.open(this.src)" loading="lazy" />';
+    if (data.image) {
+        const src = data.image.startsWith("/") ? SERVER_URL + data.image : data.image;
+        html += '<img class="message-media" src="' + DOMPurify.sanitize(src) + '" loading="lazy" />';
+    }
     if (data.gif) html += '<img class="message-media" src="' + DOMPurify.sanitize(data.gif) + '" loading="lazy" />';
     div.innerHTML = DOMPurify.sanitize(html);
+
+    div.querySelectorAll(".message-media").forEach(img => {
+        img.addEventListener("click", () => {
+            const url = img.src;
+            if (isCapacitor()) {
+                window.open(url, "_system");
+            } else {
+                window.open(url);
+            }
+        });
+    });
 
     const reactionsDiv = document.createElement("div");
     reactionsDiv.className = "message-reactions";
