@@ -1204,35 +1204,22 @@ function stopBgKeepalive() {
     }
 }
 
-// ── Capacitor lifecycle (more reliable than visibilitychange) ──
+// ── Capacitor lifecycle — open native YouTube app if background mode enabled ──
 const CapacitorApp = window.Capacitor?.Plugins?.App || null;
 if (isCapacitor() && CapacitorApp) {
     CapacitorApp.addListener("appStateChange", ({ isActive }) => {
         if (!isActive) {
-            if (player && playerReady && backgroundMode) {
-                const state = player.getPlayerState();
-                ytWasPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
-                if (ytWasPlaying) {
-                    startBgSilence();
-                    startBgAudioCtx();
-                    startBgKeepalive();
-                    setTimeout(() => {
-                        if (player && playerReady) {
-                            try { player.playVideo(); } catch(e) {}
-                        }
-                    }, 200);
+            if (backgroundMode && currentVideoId) {
+                // Open native YouTube app which supports background playback
+                if (BgAudioPlugin && typeof BgAudioPlugin.openInYouTubeApp === "function") {
+                    BgAudioPlugin.openInYouTubeApp({ videoId: currentVideoId });
                 }
             }
-        } else {
             stopBgKeepalive();
             stopBgSilence();
             stopBgAudioCtx();
-            if (player && playerReady) {
-                if (ytWasPlaying && player.getPlayerState() !== YT.PlayerState.PLAYING) {
-                    setPendingRemotePlay();
-                    player.playVideo();
-                }
-            }
+            ytWasPlaying = false;
+        } else {
             ytWasPlaying = false;
         }
     });

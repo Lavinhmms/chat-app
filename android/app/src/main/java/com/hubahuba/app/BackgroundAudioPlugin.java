@@ -1,6 +1,7 @@
 package com.hubahuba.app;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 
 import com.getcapacitor.JSObject;
@@ -43,5 +44,24 @@ public class BackgroundAudioPlugin extends Plugin {
 
     public static boolean isEnabled() {
         return isBackgroundModeEnabled;
+    }
+
+    @PluginMethod
+    public void openInYouTubeApp(PluginCall call) {
+        JSObject data = call.getData();
+        String videoId = data.getString("videoId");
+        if (videoId == null || videoId.isEmpty()) {
+            call.reject("Missing videoId");
+            return;
+        }
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://www.youtube.com/watch?v=" + videoId));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to open YouTube: " + e.getMessage());
+        }
     }
 }
