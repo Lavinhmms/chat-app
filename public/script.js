@@ -7,6 +7,58 @@ const socket        = io(SERVER_URL, {
     reconnectionAttempts: Infinity
 });
 
+// ── Push notifications & badge count (Capacitor) ──
+let unreadCount = 0;
+let appIsActive = true;
+const LocalNotifications = window.Capacitor?.Plugins?.LocalNotifications || null;
+const BadgePlugin       = window.Capacitor?.Plugins?.Badge || null;
+const CapacitorApp      = window.Capacitor?.Plugins?.App || null;
+
+function requestNotificationPermission() {
+    if (LocalNotifications && typeof LocalNotifications.requestPermissions === "function") {
+        LocalNotifications.requestPermissions();
+    }
+}
+
+function sendMessageNotification(user, message) {
+    if (!LocalNotifications || !isCapacitor()) return;
+    unreadCount++;
+    const body = unreadCount === 1
+        ? `${user}: ${message}`
+        : `${unreadCount} unread messages from ${user} and others`;
+    LocalNotifications.schedule({
+        notifications: [{
+            id: 999,
+            title: "Huba Huba",
+            body: body,
+            ongoing: false,
+            autoCancel: true
+        }]
+    });
+    if (BadgePlugin && typeof BadgePlugin.setCount === "function") {
+        BadgePlugin.setCount({ count: unreadCount });
+    }
+}
+
+function clearBadge() {
+    unreadCount = 0;
+    if (LocalNotifications && typeof LocalNotifications.removeAllDelivered === "function") {
+        LocalNotifications.removeAllDelivered();
+    }
+    if (BadgePlugin && typeof BadgePlugin.setCount === "function") {
+        BadgePlugin.setCount({ count: 0 });
+    }
+}
+
+if (isCapacitor() && CapacitorApp) {
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+        appIsActive = isActive;
+        if (isActive) clearBadge();
+    });
+}
+
+requestNotificationPermission();
+
 
 const form          = document.getElementById("form");
 const input         = document.getElementById("input");
@@ -623,6 +675,9 @@ socket.on("chat message", (data) => {
     appendMessage(data, chat);
     appendMessage(data, vchatMsgs);
     appendMessage(data, hchatMsgs);
+    if (!appIsActive && data.user !== username.value) {
+        sendMessageNotification(data.user, data.msg);
+    }
 });
 
 socket.on("message:reactions-update", ({ messageId, reactions }) => {
