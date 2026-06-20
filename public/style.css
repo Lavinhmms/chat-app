@@ -313,7 +313,9 @@ body.light .top-menu-dropdown {
     transition: all 0.15s;
 }
 
-/* Watch Together — follows theme */
+.dropdown-icon {
+    width: 20px; height: 20px; object-fit: contain;
+}
 body.dark  .explore-item {
     background: linear-gradient(135deg, rgba(124,58,237,0.35), rgba(37,99,235,0.35));
     color: white;
