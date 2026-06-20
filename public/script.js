@@ -1,7 +1,7 @@
 const SERVER_URL    = "https://chat-app-dptb.onrender.com";
 function isCapacitor() { return !!(window.Capacitor && window.Capacitor.isNativePlatform); }
 const socket        = io(SERVER_URL, {
-    transports: ["websocket"],
+    transports: isCapacitor() ? ["websocket"] : ["polling", "websocket"],
     reconnectionDelay: 1000,
     reconnectionDelayMax: 10000,
     reconnectionAttempts: Infinity
