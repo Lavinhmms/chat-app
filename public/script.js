@@ -395,7 +395,11 @@ socket.on("auth:error", (msg) => {
         lastRoomId = currentRoomId;
         currentRoomId = null;
     }
-    goToLobby("Disconnected: " + msg);
+    if (msg === "Room not found") {
+        goToLobby("");
+    } else {
+        goToLobby("Disconnected: " + msg);
+    }
 });
 
 socket.on("auth:kicked", () => {
