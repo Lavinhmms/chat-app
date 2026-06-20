@@ -8,6 +8,11 @@
 </head>
 <body>
 
+<video id="bgVideo" class="bg-video" autoplay muted loop playsinline>
+    <source src="/loki.mp4" type="video/mp4">
+</video>
+<div id="bgGlass" class="bg-glass"></div>
+
 <!-- Lobby -->
 <div class="lobby" id="lobby">
     <div class="lobby-card">
@@ -44,9 +49,6 @@
 
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
-        <video class="sidebar-video" autoplay muted loop playsinline>
-            <source src="/Assets/bg3.mp4" type="video/mp4">
-        </video>
         <div class="logo-row">
             <h2>Huba Huba</h2>
             <button id="themeToggle">◐</button>
@@ -200,7 +202,10 @@
                         <div class="hyperbeam-empty-sub">Admin: click "Start Co-Browse" to launch a shared browser. Everyone in the room will see the same screen.</div>
                     </div>
                     <div class="hyperbeam-container hidden" id="hyperbeamContainer"></div>
+                    <div class="hb-zoom-overlay hidden" id="hbZoomOverlay"></div>
                     <button class="hb-fullscreen-btn hidden" id="hyperbeamFullscreenBtn" title="Full screen (F)">⛶</button>
+                    <button class="hb-zoom-btn hidden" id="hbZoomBtn" title="Toggle zoom mode">🔍</button>
+                    <div class="hb-zoom-indicator hidden" id="hbZoomIndicator">1×</div>
                 </div>
                 <div class="hyperbeam-status" id="hyperbeamStatus">
                     <span id="hyperbeamStatusText">No active session</span>

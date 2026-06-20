@@ -2306,6 +2306,8 @@ socket.on("hyperbeam:session", ({ embedUrl }) => {
     hyperbeamIframe.sandbox = "allow-same-origin allow-scripts allow-forms allow-popups allow-modals";
     hyperbeamContainer.appendChild(hyperbeamIframe);
     hyperbeamFsBtn.classList.remove("hidden");
+    hbZoomBtn.classList.remove("hidden");
+    if (hbZoomMode) hbExitZoomMode();
 });
 
 socket.on("hyperbeam:ended", () => {
@@ -2319,6 +2321,8 @@ socket.on("hyperbeam:ended", () => {
     hyperbeamStatusText.textContent = "⏹ Session ended";
     hyperbeamUrlInput.value = "";
     hyperbeamFsBtn.classList.add("hidden");
+    hbZoomBtn.classList.add("hidden");
+    if (hbZoomMode) hbExitZoomMode();
     if (getFullscreenElement()) exitFullscreen();
 });
 
@@ -2388,9 +2392,121 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
-// Expose fullscreen button visibility to existing event handlers
-// (hyperbeam:session shows it, hyperbeam:ended hides it)
+// ── Hyperbeam Pinch-to-Zoom ──────────────────────
+const hbZoomOverlay = document.getElementById("hbZoomOverlay");
+const hbZoomBtn = document.getElementById("hbZoomBtn");
+const hbZoomIndicator = document.getElementById("hbZoomIndicator");
+let hbZoom = 1;
+let hbPanX = 0;
+let hbPanY = 0;
+let hbLastPinchDist = 0;
+let hbIsPinching = false;
+let hbLastTap = 0;
+let hbTouchStartX = 0;
+let hbTouchStartY = 0;
+let hbIsPanning = false;
+let hbZoomMode = false;
 
+function hbApplyTransform() {
+    if (hbZoom === 1 && hbPanX === 0 && hbPanY === 0) {
+        hyperbeamContainer.style.transform = "";
+    } else {
+        hyperbeamContainer.style.transform = `scale(${hbZoom}) translate(${hbPanX / hbZoom}px, ${hbPanY / hbZoom}px)`;
+    }
+    hbZoomIndicator.textContent = Math.round(hbZoom * 10) / 10 + "×";
+}
+
+function hbResetZoom() {
+    hbZoom = 1;
+    hbPanX = 0;
+    hbPanY = 0;
+    hbIsPinching = false;
+    hbIsPanning = false;
+    hbApplyTransform();
+}
+
+function hbEnterZoomMode() {
+    if (hbZoomMode) return;
+    hbZoomMode = true;
+    hbZoomOverlay.classList.remove("hidden");
+    hbZoomBtn.classList.add("active");
+    hbZoomIndicator.classList.remove("hidden");
+    hbResetZoom();
+}
+
+function hbExitZoomMode() {
+    hbZoomMode = false;
+    hbZoomOverlay.classList.add("hidden");
+    hbZoomBtn.classList.remove("active");
+    hbZoomIndicator.classList.add("hidden");
+    hbResetZoom();
+}
+
+hbZoomBtn.addEventListener("click", () => {
+    if (hbZoomMode) hbExitZoomMode();
+    else hbEnterZoomMode();
+});
+
+// Touch handlers on the overlay
+hbZoomOverlay.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+        hbIsPinching = true;
+        hbIsPanning = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        hbLastPinchDist = Math.sqrt(dx * dx + dy * dy);
+    } else if (e.touches.length === 1 && hbZoom > 1) {
+        hbTouchStartX = e.touches[0].clientX - hbPanX;
+        hbTouchStartY = e.touches[0].clientY - hbPanY;
+        hbIsPanning = true;
+    }
+});
+
+hbZoomOverlay.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    if (e.touches.length === 2 && hbIsPinching) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const scale = dist / hbLastPinchDist;
+        hbZoom = Math.max(0.5, Math.min(hbZoom * scale, 5));
+        hbLastPinchDist = dist;
+        hbApplyTransform();
+    } else if (e.touches.length === 1 && hbIsPanning && hbZoom > 1) {
+        hbPanX = e.touches[0].clientX - hbTouchStartX;
+        hbPanY = e.touches[0].clientY - hbTouchStartY;
+        hbApplyTransform();
+    }
+});
+
+hbZoomOverlay.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) hbIsPinching = false;
+    if (e.touches.length === 0) hbIsPanning = false;
+    if (e.changedTouches.length === 1 && !hbIsPinching) {
+        const now = Date.now();
+        if (now - hbLastTap < 300) {
+            hbResetZoom();
+        }
+        hbLastTap = now;
+    }
+});
+
+hbZoomOverlay.addEventListener("touchcancel", () => {
+    hbIsPinching = false;
+    hbIsPanning = false;
+});
+
+// Mouse wheel zoom (desktop)
+hbZoomOverlay.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.001;
+    hbZoom = Math.max(0.5, Math.min(hbZoom + delta, 5));
+    hbApplyTransform();
+}, { passive: false });
+
+// Show zoom button when session starts, hide when it ends
+// Visibility handled in hyperbeam:session and hyperbeam:ended handlers above
 
 acceptCallBtn.addEventListener("click", () => {
     if (!incomingCallFrom) return;
