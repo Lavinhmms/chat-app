@@ -317,18 +317,18 @@ body.light .top-menu-dropdown {
     width: 20px; height: 20px; object-fit: contain;
 }
 body.dark  .explore-item {
-    background: linear-gradient(135deg, rgba(124,58,237,0.35), rgba(37,99,235,0.35));
+    background: linear-gradient(rgba(15,23,42,0.6), rgba(15,23,42,0.6)), url("/youtube.png") center/cover;
     color: white;
 }
 body.light .explore-item {
-    background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(37,99,235,0.15));
+    background: linear-gradient(rgba(255,255,255,0.6), rgba(255,255,255,0.6)), url("/youtube.png") center/cover;
     color: #4c1d95;
 }
 body.dark  .explore-item:hover {
-    background: linear-gradient(135deg, rgba(124,58,237,0.6), rgba(37,99,235,0.6));
+    background: linear-gradient(rgba(15,23,42,0.75), rgba(15,23,42,0.75)), url("/youtube.png") center/cover;
 }
 body.light .explore-item:hover {
-    background: linear-gradient(135deg, rgba(124,58,237,0.25), rgba(37,99,235,0.25));
+    background: linear-gradient(rgba(255,255,255,0.75), rgba(255,255,255,0.75)), url("/youtube.png") center/cover;
 }
 
 /* Call — follows theme */
@@ -1103,15 +1103,15 @@ body.light #hform #hemojiBtn, body.light #hform #hgifBtn, body.light #hform #him
 
 /* Hyperbeam dropdown item */
 body.dark  .hyperbeam-item {
-    background: rgba(22,163,74,0.25);
+    background: linear-gradient(rgba(15,23,42,0.6), rgba(15,23,42,0.6)), url("/Hyperbeam.png") center/cover;
     color: white;
 }
 body.light .hyperbeam-item {
-    background: rgba(22,163,74,0.12);
+    background: linear-gradient(rgba(255,255,255,0.6), rgba(255,255,255,0.6)), url("/Hyperbeam.png") center/cover;
     color: #14532d;
 }
-body.dark  .hyperbeam-item:hover  { background: rgba(22,163,74,0.45); }
-body.light .hyperbeam-item:hover  { background: rgba(22,163,74,0.25); }
+body.dark  .hyperbeam-item:hover  { background: linear-gradient(rgba(15,23,42,0.75), rgba(15,23,42,0.75)), url("/Hyperbeam.png") center/cover; }
+body.light .hyperbeam-item:hover  { background: linear-gradient(rgba(255,255,255,0.75), rgba(255,255,255,0.75)), url("/Hyperbeam.png") center/cover; }
 
 
 @media (max-width: 768px) {
