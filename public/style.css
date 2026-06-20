@@ -548,7 +548,7 @@ body.light #gifBtn, body.light #vgifBtn { color: #111; }
 }
 .emoji-picker.hidden { display: none; }
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 6px; font-size: 22px; cursor: pointer; user-select: none; }
-.emoji-grid span { padding: 4px; border-radius: 8px; transition: background 0.15s; }
+.emoji-grid span { padding: 4px; border-radius: 8px; transition: background 0.15s; touch-action: manipulation; }
 .emoji-grid span:hover { background: rgba(255,255,255,0.15); }
 #emojiBtn { width: 50px; height: 50px; font-size: 22px; background: rgba(255,255,255,0.1); border-radius: 12px; flex-shrink: 0; }
 body.light #emojiBtn { background: rgba(0,0,0,0.08); }

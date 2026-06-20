@@ -21,13 +21,25 @@ app.use((req, res, next) => {
 
 const ALLOWED_ORIGIN = process.env.ORIGIN
     ? process.env.ORIGIN.split(",").map(s => s.trim())
-    : ["http://localhost:3000", "capacitor://localhost", "http://localhost"];
+    : ["http://localhost:3000", "capacitor://localhost", "http://localhost", "https://chat-app-dptb.onrender.com"];
 const io     = new Server(server, {
     cors: {
         origin: ALLOWED_ORIGIN,
         methods: ["GET", "POST"],
         credentials: true
     }
+});
+
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && ALLOWED_ORIGIN.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
 });
 
 // ── Validation helpers ─────────────────────────────
@@ -171,7 +183,7 @@ app.get("/api/gif-search", (req, res) => {
                     id: g.id,
                     url: g.images.preview_gif?.url || g.images.fixed_height_small.url,
                     mp4: g.images.fixed_width_small?.mp4 || g.images.preview?.mp4 || "",
-                    chat: g.images.downsized.url,
+                    chat: g.images.downsized?.url || g.images.fixed_height.url,
                     original: g.images.original.url
                 }));
                 const out = { results, error: null };

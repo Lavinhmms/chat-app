@@ -864,11 +864,12 @@ const hgrid = document.querySelector("#hemojiPicker .emoji-grid");
 emojis.forEach(emoji => {
     const span = document.createElement("span");
     span.textContent = emoji;
-    span.addEventListener("click", () => { input.value += emoji; input.focus(); });
+    span.addEventListener("pointerdown", (e) => { e.preventDefault(); input.value += emoji; input.focus(); });
     grid.appendChild(span);
     const vspan = document.createElement("span");
     vspan.textContent = emoji;
-    vspan.addEventListener("click", () => {
+    vspan.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
         const activeInput = document.activeElement;
         if (activeInput === vinput) { vinput.value += emoji; vinput.focus(); }
         else { input.value += emoji; input.focus(); }
@@ -876,7 +877,8 @@ emojis.forEach(emoji => {
     vgrid.appendChild(vspan);
     const hspan = document.createElement("span");
     hspan.textContent = emoji;
-    hspan.addEventListener("click", () => {
+    hspan.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
         const activeInput = document.activeElement;
         if (activeInput === hinput) { hinput.value += emoji; hinput.focus(); }
         else { input.value += emoji; input.focus(); }
@@ -960,13 +962,15 @@ function searchGiphy(query, resultsEl) {
                     socket.emit("chat message", { id: generateMessageId(), user: username.value, msg: "", gif: g.chat });
                     gifPicker.classList.add("hidden");
                     vgifPicker.classList.add("hidden");
+                    hgifPicker.classList.add("hidden");
                 });
                 frag.appendChild(el);
             });
             resultsEl.appendChild(frag);
         })
-        .catch(() => {
+        .catch((err) => {
             resultsEl.innerHTML = '<div class="gif-loading">Search failed</div>';
+            console.error("GIF search error:", err);
         });
 }
 
