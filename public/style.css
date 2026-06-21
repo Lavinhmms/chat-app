@@ -927,41 +927,35 @@ body.light .hb-url-input::placeholder { color: rgba(0,0,0,0.35); }
 }
 .hyperbeam-container {
     position: absolute; inset: 0; z-index: 1;
-    will-change: transform;
+    transition: transform 0.08s ease-out;
 }
 .hyperbeam-container iframe {
     width: 100%; height: 100%; border: none;
 }
 
-.hb-zoom-overlay {
-    position: absolute; inset: 0; z-index: 3;
-    background: transparent;
-    touch-action: none;
+.hb-zoom-controls {
+    position: absolute; bottom: 8px; right: 8px; z-index: 20;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(0,0,0,0.55);
+    padding: 4px 6px; border-radius: 8px;
+    backdrop-filter: blur(4px);
 }
-.hb-zoom-overlay.hidden { display: none; }
-
-.hb-zoom-btn {
-    position: absolute; bottom: 8px; left: 8px; z-index: 20;
-    width: 36px; height: 36px;
-    background: rgba(0,0,0,0.5); color: white;
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 8px; font-size: 16px;
-    cursor: pointer; display: flex;
-    align-items: center; justify-content: center;
+.hb-zoom-controls.hidden { display: none; }
+.hb-zoom-controls button {
+    width: 28px; height: 28px;
+    background: rgba(255,255,255,0.1); color: white;
+    border: none; border-radius: 6px;
+    font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
     transition: background 0.15s;
+    line-height: 1;
 }
-.hb-zoom-btn:hover { background: rgba(0,0,0,0.7); }
-.hb-zoom-btn.active { background: #2563eb; border-color: #3b82f6; }
-.hb-zoom-btn.hidden { display: none; }
-
-.hb-zoom-indicator {
-    position: absolute; top: 8px; right: 8px; z-index: 20;
-    background: rgba(0,0,0,0.6); color: white;
-    padding: 4px 10px; border-radius: 6px;
-    font-size: 12px; font-weight: bold;
+.hb-zoom-controls button:hover { background: rgba(255,255,255,0.25); }
+.hb-zoom-value {
+    color: white; font-size: 11px; font-weight: bold;
+    min-width: 30px; text-align: center;
     pointer-events: none;
 }
-.hb-zoom-indicator.hidden { display: none; }
 .hyperbeam-empty {
     position: absolute; inset: 0; z-index: 2;
     display: flex; flex-direction: column;

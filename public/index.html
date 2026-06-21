@@ -202,10 +202,13 @@
                         <div class="hyperbeam-empty-sub">Admin: click "Start Co-Browse" to launch a shared browser. Everyone in the room will see the same screen.</div>
                     </div>
                     <div class="hyperbeam-container hidden" id="hyperbeamContainer"></div>
-                    <div class="hb-zoom-overlay hidden" id="hbZoomOverlay"></div>
                     <button class="hb-fullscreen-btn hidden" id="hyperbeamFullscreenBtn" title="Full screen (F)">⛶</button>
-                    <button class="hb-zoom-btn hidden" id="hbZoomBtn" title="Toggle zoom mode">🔍</button>
-                    <div class="hb-zoom-indicator hidden" id="hbZoomIndicator">1×</div>
+                    <div class="hb-zoom-controls hidden" id="hbZoomControls">
+                        <button class="hb-zoom-reset" id="hbZoomReset" title="Reset zoom">⟲</button>
+                        <button class="hb-zoom-out" id="hbZoomOut" title="Zoom out">−</button>
+                        <span class="hb-zoom-value" id="hbZoomValue">1×</span>
+                        <button class="hb-zoom-in" id="hbZoomIn" title="Zoom in">+</button>
+                    </div>
                 </div>
                 <div class="hyperbeam-status" id="hyperbeamStatus">
                     <span id="hyperbeamStatusText">No active session</span>
