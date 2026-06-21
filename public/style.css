@@ -855,10 +855,6 @@ body.light #vform #vemojiBtn, body.light #vform #vgifBtn, body.light #vform #vim
 .content-area.hyperbeam-open .chat-container { display: none; }
 .content-area.hyperbeam-open .video-panel { display: none; }
 .content-area.hyperbeam-open .hyperbeam-panel { display: flex; flex: 1; }
-.content-area.zenshin-open .chat-container { display: none; }
-.content-area.zenshin-open .video-panel { display: none; }
-.content-area.zenshin-open .hyperbeam-panel { display: none; }
-.content-area.zenshin-open .zenshin-panel { display: flex; flex: 1; }
 .hyperbeam-url-bar {
     display: flex; gap: 8px; padding: 10px 12px;
     flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -1691,23 +1687,5 @@ body.light .bg-glass {
     background: rgba(255,255,255,0.3);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-}
-
-/* =========================
-   ZENSHIN PANEL
-======================== */
-.zenshin-panel {
-    flex: 1; min-width: 0; height: 100%;
-    display: flex; flex-direction: column;
-    background: rgba(10,10,20,0.3);
-    border-left: none; overflow: hidden;
-}
-.zenshin-panel.hidden { display: none; }
-.zenshin-wrapper {
-    flex: 1; min-height: 0; overflow: hidden;
-    position: relative; background: #000;
-}
-.zenshin-iframe {
-    width: 100%; height: 100%; border: none;
 }
 
