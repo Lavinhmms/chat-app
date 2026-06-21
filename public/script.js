@@ -2057,6 +2057,38 @@ const toggleCameraBtn = document.getElementById("toggleCameraBtn");
 const participantsBtn = document.getElementById("participantsBtn");
 
 
+// ════════════════════════════════════════════════════
+// ZENSHIN ANIME
+// ════════════════════════════════════════════════════
+
+const zenshinBtn = document.getElementById("zenshinBtn");
+const zenshinPanel = document.getElementById("zenshinPanel");
+
+function openZenshinPanel() {
+    closeVideoPanel();
+    closeHyperbeamPanel();
+    zenshinPanel.classList.remove("hidden");
+    contentArea.classList.add("zenshin-open");
+    backBtn.classList.remove("hidden");
+    if (inCall) callPanel.classList.add("hidden");
+}
+
+function closeZenshinPanel() {
+    zenshinPanel.classList.add("hidden");
+    contentArea.classList.remove("zenshin-open");
+    if (inCall) callPanel.classList.remove("hidden");
+    updateBackBtn();
+}
+
+zenshinBtn.addEventListener("click", () => {
+    topMenuDropdown.classList.add("hidden");
+    if (zenshinPanel.classList.contains("hidden")) {
+        openZenshinPanel();
+    } else {
+        closeZenshinPanel();
+    }
+});
+
 const callPanelHeader = document.getElementById("callPanelHeader");
 const appEl           = document.querySelector(".app");
 let   callExpanded    = false;
@@ -2226,6 +2258,7 @@ exploreBtn.addEventListener("click", () => {
 backBtn.addEventListener("click", () => {
     closeVideoPanel();
     closeHyperbeamPanel();
+    closeZenshinPanel();
 });
 
 // ════════════════════════════════════════════════════
@@ -2262,8 +2295,8 @@ function closeHyperbeamPanel() {
 }
 
 function updateBackBtn() {
-    const bothHidden = videoPanel.classList.contains("hidden") && hyperbeamPanel.classList.contains("hidden");
-    backBtn.classList.toggle("hidden", bothHidden);
+    const allHidden = videoPanel.classList.contains("hidden") && hyperbeamPanel.classList.contains("hidden") && zenshinPanel.classList.contains("hidden");
+    backBtn.classList.toggle("hidden", allHidden);
 }
 
 hyperbeamBtn.addEventListener("click", () => {
