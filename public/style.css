@@ -951,11 +951,19 @@ body.light .hb-url-input::placeholder { color: rgba(0,0,0,0.35); }
     line-height: 1;
 }
 .hb-zoom-controls button:hover { background: rgba(255,255,255,0.25); }
+.hb-zoom-controls button.hb-pan-btn.active { background: #2563eb; }
 .hb-zoom-value {
     color: white; font-size: 11px; font-weight: bold;
     min-width: 30px; text-align: center;
     pointer-events: none;
 }
+
+.hb-pan-overlay {
+    position: absolute; inset: 0; z-index: 3;
+    background: transparent;
+    touch-action: none;
+}
+.hb-pan-overlay.hidden { display: none; }
 .hyperbeam-empty {
     position: absolute; inset: 0; z-index: 2;
     display: flex; flex-direction: column;

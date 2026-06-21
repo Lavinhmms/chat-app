@@ -2307,6 +2307,7 @@ socket.on("hyperbeam:session", ({ embedUrl }) => {
     hyperbeamContainer.appendChild(hyperbeamIframe);
     hyperbeamFsBtn.classList.remove("hidden");
     hbZoomControls.classList.remove("hidden");
+    if (hbPanMode) hbExitPanMode();
     hbResetZoom();
 });
 
@@ -2322,6 +2323,7 @@ socket.on("hyperbeam:ended", () => {
     hyperbeamUrlInput.value = "";
     hyperbeamFsBtn.classList.add("hidden");
     hbZoomControls.classList.add("hidden");
+    if (hbPanMode) hbExitPanMode();
     hbResetZoom();
     if (getFullscreenElement()) exitFullscreen();
 });
@@ -2398,22 +2400,100 @@ const hbZoomInBtn = document.getElementById("hbZoomIn");
 const hbZoomOutBtn = document.getElementById("hbZoomOut");
 const hbZoomResetBtn = document.getElementById("hbZoomReset");
 const hbZoomValue = document.getElementById("hbZoomValue");
+const hbPanOverlay = document.getElementById("hbPanOverlay");
+const hbPanBtn = document.getElementById("hbPanBtn");
 let hbZoom = 1;
+let hbPanX = 0;
+let hbPanY = 0;
+let hbPanMode = false;
+let hbDragStartX = 0;
+let hbDragStartY = 0;
+let hbDragStartPanX = 0;
+let hbDragStartPanY = 0;
+let hbIsDragging = false;
 
 function hbApplyZoom() {
-    if (hbZoom === 1) {
+    if (hbZoom === 1 && hbPanX === 0 && hbPanY === 0) {
         hyperbeamContainer.style.transform = "";
     } else {
-        hyperbeamContainer.style.transform = `scale(${hbZoom})`;
-        hyperbeamContainer.style.transformOrigin = "50% 50%";
+        hyperbeamContainer.style.transform = `scale(${hbZoom}) translate(${hbPanX}px, ${hbPanY}px)`;
+        hyperbeamContainer.style.transformOrigin = "0 0";
     }
     hbZoomValue.textContent = Math.round(hbZoom * 10) / 10 + "×";
+    hbPanBtn.classList.toggle("hidden", hbZoom <= 1);
+    if (hbZoom <= 1 && hbPanMode) hbExitPanMode();
 }
 
 function hbResetZoom() {
     hbZoom = 1;
+    hbPanX = 0;
+    hbPanY = 0;
     hbApplyZoom();
 }
+
+function hbEnterPanMode() {
+    hbPanMode = true;
+    hbPanOverlay.classList.remove("hidden");
+    hbPanBtn.classList.add("active");
+    hbPanBtn.textContent = "🔍";
+}
+
+function hbExitPanMode() {
+    hbPanMode = false;
+    hbPanOverlay.classList.add("hidden");
+    hbPanBtn.classList.remove("active");
+    hbPanBtn.textContent = "✋";
+}
+
+hbPanBtn.addEventListener("click", () => {
+    if (hbPanMode) hbExitPanMode();
+    else hbEnterPanMode();
+});
+
+// Pan via overlay drag
+hbPanOverlay.addEventListener("mousedown", (e) => {
+    if (!hbPanMode || hbZoom <= 1) return;
+    hbIsDragging = true;
+    hbDragStartX = e.clientX;
+    hbDragStartY = e.clientY;
+    hbDragStartPanX = hbPanX;
+    hbDragStartPanY = hbPanY;
+});
+
+window.addEventListener("mousemove", (e) => {
+    if (!hbIsDragging) return;
+    hbPanX = hbDragStartPanX + (e.clientX - hbDragStartX);
+    hbPanY = hbDragStartPanY + (e.clientY - hbDragStartY);
+    hbApplyZoom();
+});
+
+window.addEventListener("mouseup", () => {
+    hbIsDragging = false;
+});
+
+hbPanOverlay.addEventListener("touchstart", (e) => {
+    if (!hbPanMode || hbZoom <= 1 || e.touches.length !== 1) return;
+    hbIsDragging = true;
+    hbDragStartX = e.touches[0].clientX;
+    hbDragStartY = e.touches[0].clientY;
+    hbDragStartPanX = hbPanX;
+    hbDragStartPanY = hbPanY;
+});
+
+hbPanOverlay.addEventListener("touchmove", (e) => {
+    if (!hbIsDragging || e.touches.length !== 1) return;
+    hbPanX = hbDragStartPanX + (e.touches[0].clientX - hbDragStartX);
+    hbPanY = hbDragStartPanY + (e.touches[0].clientY - hbDragStartY);
+    hbApplyZoom();
+});
+
+hbPanOverlay.addEventListener("touchend", () => {
+    hbIsDragging = false;
+});
+
+hbPanOverlay.addEventListener("touchcancel", () => {
+    hbIsDragging = false;
+});
 
 hbZoomInBtn.addEventListener("click", () => {
     hbZoom = Math.min(5, hbZoom + 0.5);
