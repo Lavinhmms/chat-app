@@ -206,6 +206,15 @@ function joinRoom(roomId, hasPassword) {
 }
 
 // ── Lobby error ──
+function setBgVideo(src) {
+    const vid = document.getElementById("bgVideo");
+    if (vid) {
+        vid.querySelector("source").src = src;
+        vid.load();
+        vid.play().catch(() => {});
+    }
+}
+
 function showLobbyError(msg) {
     lobbyError.textContent = msg;
     lobbyError.classList.toggle("hidden", !msg);
@@ -217,6 +226,7 @@ socket.on("room:joined", ({ roomId, isAdmin: admin, hasPassword, username: name,
     createRoomBtn.textContent = "Create Room";
     lobby.classList.add("hidden");
     app.classList.remove("hidden");
+    setBgVideo("/oul1.mp4");
     currentRoomId = roomId;
     roomTitle.textContent = roomId;
 
@@ -281,6 +291,7 @@ function goToLobby(msg) {
     callPanel.classList.add("hidden");
     app.classList.add("hidden");
     lobby.classList.remove("hidden");
+    setBgVideo("/oul2.mp4");
     createRoomBtn.disabled = false;
     createRoomBtn.textContent = "Create Room";
     if (currentRoomId) {
