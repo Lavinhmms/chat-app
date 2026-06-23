@@ -71,6 +71,36 @@ let   userStatus    = "online";
 const REACT_EMOJIS = ["👍", "❤️", "😂", "😮"];
 const MORE_REACT_EMOJIS = ["😢","🙏","🔥","🎉","👏","💯","😡","🥺","😎","🤔","💔","✨","😴","🙌"];
 
+// ── Swipe-to-reply state ──
+let replyTo = null;
+function setReplyTo(data) {
+    replyTo = { id: data.id, user: data.user, msg: data.msg };
+    const snippets = [
+        { bar: "replyBar", name: "replyBarName", msg: "replyBarMsg" },
+        { bar: "vreplyBar", name: "vreplyBarName", msg: "vreplyBarMsg" },
+        { bar: "hreplyBar", name: "hreplyBarName", msg: "hreplyBarMsg" }
+    ];
+    const snippet = DOMPurify.sanitize(data.msg || (data.image ? "📷 Image" : data.gif ? "🎞️ GIF" : ""));
+    snippets.forEach(({ bar: barId, name: nameId, msg: msgId }) => {
+        const bar = document.getElementById(barId);
+        const nameEl = document.getElementById(nameId);
+        const msgEl = document.getElementById(msgId);
+        if (bar && nameEl && msgEl) {
+            nameEl.textContent = DOMPurify.sanitize(data.user);
+            msgEl.textContent = snippet;
+            bar.classList.remove("hidden");
+        }
+    });
+}
+function cancelReply() {
+    replyTo = null;
+    document.querySelectorAll(".reply-bar").forEach(b => b.classList.add("hidden"));
+}
+
+document.getElementById("replyBarCancel").addEventListener("click", cancelReply);
+document.getElementById("vreplyBarCancel").addEventListener("click", cancelReply);
+document.getElementById("hreplyBarCancel").addEventListener("click", cancelReply);
+
 const connStatus = document.getElementById("connStatus");
 socket.on("connect", () => {
     connStatus.textContent = "✓ Connected to server";
@@ -605,17 +635,21 @@ form.addEventListener("submit", (e) => {
     if ((!msgText && !pendingImage) || !username.value.trim()) return;
 
     const msgId = generateMessageId();
+    const payload = { id: msgId, user: username.value, msg: msgText };
+    if (replyTo) payload.replyTo = replyTo;
     if (pendingImage) {
         uploadImage(pendingImage).then(url => {
             if (url) {
-                socket.emit("chat message", { id: msgId, user: username.value, msg: msgText, image: url });
+                payload.image = url;
+                socket.emit("chat message", payload);
             }
             clearPending("main");
         });
     } else {
-        socket.emit("chat message", { id: msgId, user: username.value, msg: msgText });
+        socket.emit("chat message", payload);
     }
     input.value = "";
+    cancelReply();
     socket.emit("stop typing");
     emojiPicker.classList.add("hidden");
 });
@@ -625,7 +659,12 @@ function appendMessage(data, container) {
     if (data.user === username.value) div.classList.add("self");
     else if (container === chat) playNotification();
     if (data.id) div.dataset.id = data.id;
-    let html = "<strong>" + DOMPurify.sanitize(data.user) + "</strong>" + DOMPurify.sanitize(data.msg);
+    let html = "";
+    if (data.replyTo) {
+        const replySnippet = data.replyTo.msg || (data.replyTo.image ? "📷 Image" : data.replyTo.gif ? "🎞️ GIF" : "");
+        html += '<div class="reply-quoted"><span class="reply-quoted-name">' + DOMPurify.sanitize(data.replyTo.user) + '</span><span class="reply-quoted-msg">' + DOMPurify.sanitize(replySnippet) + '</span></div>';
+    }
+    html += "<strong>" + DOMPurify.sanitize(data.user) + "</strong>" + DOMPurify.sanitize(data.msg);
     if (data.image) {
         const src = data.image.startsWith("/") ? SERVER_URL + data.image : data.image;
         html += '<img class="message-media" src="' + DOMPurify.sanitize(src) + '" loading="lazy" />';
@@ -665,7 +704,16 @@ function appendMessage(data, container) {
         lastTapTime = now;
     });
 
+    // Swipe-to-reply state for this message
+    let swipeStartX = 0, swipeStartY = 0, swipeDx = 0, swiping = false;
+    const swipeIndicator = document.createElement("div");
+    swipeIndicator.className = "swipe-reply-indicator";
+
     div.addEventListener("touchstart", (e) => {
+        swipeStartX = e.touches[0].clientX;
+        swipeStartY = e.touches[0].clientY;
+        swipeDx = 0;
+        swiping = false;
         longPressTriggered = false;
         longPressTimer = setTimeout(() => {
             longPressTriggered = true;
@@ -675,11 +723,33 @@ function appendMessage(data, container) {
         }, 500);
     }, { passive: true });
 
+    div.addEventListener("touchmove", (e) => {
+        clearTimeout(longPressTimer);
+        swipeDx = e.touches[0].clientX - swipeStartX;
+        const dy = Math.abs(e.touches[0].clientY - swipeStartY);
+        if (swipeDx > 20 && dy < 30) {
+            swiping = true;
+            swipeIndicator.style.transform = `translateX(${Math.min(swipeDx, 60)}px)`;
+            swipeIndicator.style.opacity = Math.min(swipeDx / 60, 1);
+            div.classList.add("swiping");
+        } else if (dy > 30) {
+            swiping = false;
+            div.classList.remove("swiping");
+            swipeIndicator.style.transform = "translateX(0)";
+            swipeIndicator.style.opacity = "0";
+        }
+    }, { passive: true });
+
     div.addEventListener("touchend", () => {
         clearTimeout(longPressTimer);
-    });
-    div.addEventListener("touchmove", () => {
-        clearTimeout(longPressTimer);
+        if (swiping && swipeDx > 50) {
+            div.classList.remove("swiping");
+            swipeIndicator.style.transform = "translateX(0)";
+            swipeIndicator.style.opacity = "0";
+            if (data.id) setReplyTo(data);
+        }
+        swiping = false;
+        swipeDx = 0;
     });
 
     // Small hover trigger for desktop (subtle ⋯)
@@ -696,6 +766,18 @@ function appendMessage(data, container) {
         }
     });
     div.appendChild(hoverTrigger);
+
+    // Desktop reply button
+    const replyBtn = document.createElement("button");
+    replyBtn.className = "reply-trigger";
+    replyBtn.textContent = "↩";
+    replyBtn.title = "Reply";
+    replyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (data.id) setReplyTo(data);
+    });
+    div.appendChild(replyBtn);
+    div.appendChild(swipeIndicator);
 
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
@@ -971,7 +1053,10 @@ function searchGiphy(query, resultsEl) {
                     el.decoding = "async";
                 }
                 el.addEventListener("click", () => {
-                    socket.emit("chat message", { id: generateMessageId(), user: username.value, msg: "", gif: g.chat });
+                    const payload = { id: generateMessageId(), user: username.value, msg: "", gif: g.chat };
+                    if (replyTo) payload.replyTo = replyTo;
+                    socket.emit("chat message", payload);
+                    cancelReply();
                     gifPicker.classList.add("hidden");
                     vgifPicker.classList.add("hidden");
                     hgifPicker.classList.add("hidden");
@@ -1577,17 +1662,21 @@ vform.addEventListener("submit", (e) => {
     if ((!msgText && !vpendingImage) || !username.value.trim()) return;
 
     const msgId = generateMessageId();
+    const payload = { id: msgId, user: username.value, msg: msgText };
+    if (replyTo) payload.replyTo = replyTo;
     if (vpendingImage) {
         uploadImage(vpendingImage).then(url => {
             if (url) {
-                socket.emit("chat message", { id: msgId, user: username.value, msg: msgText, image: url });
+                payload.image = url;
+                socket.emit("chat message", payload);
             }
             clearPending("video");
         });
     } else {
-        socket.emit("chat message", { id: msgId, user: username.value, msg: msgText });
+        socket.emit("chat message", payload);
     }
     vinput.value = "";
+    cancelReply();
     socket.emit("stop typing");
 });
 
@@ -1619,17 +1708,21 @@ hform.addEventListener("submit", (e) => {
     if ((!msgText && !hpendingImage) || !username.value.trim()) return;
 
     const msgId = generateMessageId();
+    const payload = { id: msgId, user: username.value, msg: msgText };
+    if (replyTo) payload.replyTo = replyTo;
     if (hpendingImage) {
         uploadImage(hpendingImage).then(url => {
             if (url) {
-                socket.emit("chat message", { id: msgId, user: username.value, msg: msgText, image: url });
+                payload.image = url;
+                socket.emit("chat message", payload);
             }
             clearPending("hyperbeam");
         });
     } else {
-        socket.emit("chat message", { id: msgId, user: username.value, msg: msgText });
+        socket.emit("chat message", payload);
     }
     hinput.value = "";
+    cancelReply();
     socket.emit("stop typing");
 });
 

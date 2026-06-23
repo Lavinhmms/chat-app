@@ -1698,3 +1698,78 @@ body.light .bg-glass {
     -webkit-backdrop-filter: blur(6px);
 }
 
+/* ── Swipe-to-reply indicator ── */
+.swipe-reply-indicator {
+    position: absolute; top: 0; left: -60px; bottom: 0;
+    width: 4px; background: #34b7f1; border-radius: 2px;
+    pointer-events: none; opacity: 0; transition: none;
+    z-index: 5;
+}
+.message.swiping {
+    background: rgba(52,183,241,0.08) !important;
+}
+
+/* ── Reply bar above form ── */
+.reply-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; flex-shrink: 0; width: 100%;
+    background: rgba(30,30,50,0.95);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.reply-bar.hidden { display: none; }
+.reply-bar-content {
+    flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
+    font-size: 12px; color: rgba(255,255,255,0.6);
+}
+.reply-bar-label { color: rgba(255,255,255,0.4); }
+.reply-bar-name { color: #34b7f1; font-weight: 600; }
+.reply-bar-msg {
+    color: rgba(255,255,255,0.5);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%;
+}
+.reply-bar-cancel {
+    width: 24px; height: 24px; border: none; border-radius: 50%;
+    background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6);
+    font-size: 11px; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.reply-bar-cancel:hover { background: rgba(220,38,38,0.5); color: #fca5a5; }
+
+/* ── Quoted reply inside message ── */
+.reply-quoted {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 6px 10px; margin-bottom: 8px;
+    border-left: 3px solid #34b7f1;
+    background: rgba(52,183,241,0.08);
+    border-radius: 6px;
+}
+.reply-quoted-name { font-size: 11px; color: #34b7f1; font-weight: 600; }
+.reply-quoted-msg { font-size: 12px; color: rgba(255,255,255,0.5); }
+.self .reply-quoted {
+    background: rgba(52,183,241,0.06);
+}
+
+/* ── Desktop reply trigger ── */
+.reply-trigger {
+    position: absolute;
+    bottom: -10px;
+    right: 36px;
+    width: 22px; height: 22px;
+    border: none; border-radius: 50%;
+    background: rgba(30,30,50,0.9);
+    color: rgba(255,255,255,0.5);
+    font-size: 11px; cursor: pointer; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; line-height: 1;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.15s, transform 0.15s;
+}
+.message:hover .reply-trigger { opacity: 1; pointer-events: auto; }
+.reply-trigger:hover { transform: scale(1.2); color: #34b7f1; }
+.self .reply-trigger { right: auto; left: 36px; }
+@media (pointer: coarse) {
+    .reply-trigger { opacity: 1; pointer-events: auto; }
+}
+
