@@ -448,12 +448,20 @@ io.on("connection", (socket) => {
         if (data.image && typeof data.image === "string" && data.image.length > 500) return;
         if (data.gif && typeof data.gif === "string" && data.gif.length > 500) return;
         const msgId = data.id ? String(data.id).slice(0, 100) : undefined;
+        const replyTo = data.replyTo && typeof data.replyTo === "object" ? {
+            id: String(data.replyTo.id || "").slice(0, 100),
+            user: String(data.replyTo.user || "").slice(0, MAX_USERNAME),
+            msg: String(data.replyTo.msg || "").slice(0, MAX_MSG_LENGTH),
+            image: data.replyTo.image ? String(data.replyTo.image).slice(0, 500) : undefined,
+            gif: data.replyTo.gif ? String(data.replyTo.gif).slice(0, 500) : undefined
+        } : undefined;
         io.to(socket.roomId).emit("chat message", {
             id: msgId,
             user: (data.user || "").slice(0, MAX_USERNAME),
             msg: data.msg.slice(0, MAX_MSG_LENGTH),
             image: data.image ? data.image.slice(0, 500) : undefined,
-            gif: data.gif ? data.gif.slice(0, 500) : undefined
+            gif: data.gif ? data.gif.slice(0, 500) : undefined,
+            replyTo: replyTo
         });
     });
     socket.on("typing", (u) => {
