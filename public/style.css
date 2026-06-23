@@ -1688,7 +1688,7 @@ body.light .bg-video { opacity: 0.8; filter: brightness(1.2); }
     position: fixed; inset: 0; z-index: -1; pointer-events: none;
 }
 body.dark  .bg-glass {
-    background: rgba(0,0,0,0.06);
+    background: rgba(0,0,0,0.35);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
 }
