@@ -1773,3 +1773,28 @@ body.light .bg-glass {
     .reply-trigger { opacity: 1; pointer-events: auto; }
 }
 
+/* ── Replied badge on original message ── */
+.replied-badge {
+    display: inline-block; font-size: 11px; color: #34b7f1;
+    margin-top: 6px; cursor: default; opacity: 0.7;
+}
+.replied-badge:hover { opacity: 1; }
+
+/* ── Reply highlight animation ── */
+.message.reply-highlight {
+    animation: replyPulse 2s ease-out;
+}
+@keyframes replyPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(52,183,241,0.5); }
+    50%  { box-shadow: 0 0 0 8px rgba(52,183,241,0.15); }
+    100% { box-shadow: 0 0 0 0 rgba(52,183,241,0); }
+}
+.self.reply-highlight {
+    animation-name: replyPulseSelf;
+}
+@keyframes replyPulseSelf {
+    0%   { box-shadow: 0 0 0 0 rgba(52,183,241,0.4); }
+    50%  { box-shadow: 0 0 0 8px rgba(52,183,241,0.1); }
+    100% { box-shadow: 0 0 0 0 rgba(52,183,241,0); }
+}
+

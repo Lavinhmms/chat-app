@@ -672,6 +672,15 @@ function appendMessage(data, container) {
     if (data.gif) html += '<img class="message-media" src="' + DOMPurify.sanitize(data.gif) + '" loading="lazy" />';
     div.innerHTML = DOMPurify.sanitize(html);
 
+    // Click quoted reply -> scroll to original message
+    const quoted = div.querySelector(".reply-quoted");
+    if (quoted && data.replyTo && data.replyTo.id) {
+        quoted.addEventListener("click", (e) => {
+            e.stopPropagation();
+            scrollToMessage(data.replyTo.id, container);
+        });
+    }
+
     div.querySelectorAll(".message-media").forEach(img => {
         img.addEventListener("click", () => {
             const url = img.src;
@@ -780,7 +789,31 @@ function appendMessage(data, container) {
     div.appendChild(swipeIndicator);
 
     container.appendChild(div);
+
+    // Mark the original message as having a reply
+    if (data.replyTo && data.replyTo.id) {
+        const original = container.querySelector(`.message[data-id="${data.replyTo.id}"]`);
+        if (original && !original.querySelector(".replied-badge")) {
+            const badge = document.createElement("span");
+            badge.className = "replied-badge";
+            badge.textContent = "↩";
+            badge.title = "Someone replied to this";
+            original.appendChild(badge);
+        }
+    }
+
     container.scrollTop = container.scrollHeight;
+}
+
+function scrollToMessage(messageId, container) {
+    const target = container.querySelector(`.message[data-id="${messageId}"]`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.remove("reply-highlight");
+    // Force reflow then add class for animation
+    void target.offsetWidth;
+    target.classList.add("reply-highlight");
+    setTimeout(() => target.classList.remove("reply-highlight"), 2000);
 }
 
 socket.on("chat message", (data) => {
