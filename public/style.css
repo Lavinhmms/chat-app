@@ -1698,17 +1698,6 @@ body.light .bg-glass {
     -webkit-backdrop-filter: blur(6px);
 }
 
-/* ── Swipe-to-reply indicator ── */
-.swipe-reply-indicator {
-    position: absolute; top: 0; left: -60px; bottom: 0;
-    width: 4px; background: #34b7f1; border-radius: 2px;
-    pointer-events: none; opacity: 0; transition: none;
-    z-index: 5;
-}
-.message.swiping {
-    background: rgba(52,183,241,0.08) !important;
-}
-
 /* ── Reply bar above form ── */
 .reply-bar {
     display: flex; align-items: center; gap: 8px;

@@ -715,8 +715,6 @@ function appendMessage(data, container) {
 
     // Swipe-to-reply state for this message
     let swipeStartX = 0, swipeStartY = 0, swipeDx = 0, swiping = false;
-    const swipeIndicator = document.createElement("div");
-    swipeIndicator.className = "swipe-reply-indicator";
 
     div.addEventListener("touchstart", (e) => {
         swipeStartX = e.touches[0].clientX;
@@ -738,24 +736,30 @@ function appendMessage(data, container) {
         const dy = Math.abs(e.touches[0].clientY - swipeStartY);
         if (swipeDx > 20 && dy < 30) {
             swiping = true;
-            swipeIndicator.style.transform = `translateX(${Math.min(swipeDx, 60)}px)`;
-            swipeIndicator.style.opacity = Math.min(swipeDx / 60, 1);
-            div.classList.add("swiping");
+            div.style.transform = `translateX(${Math.min(swipeDx, 80)}px)`;
+            div.style.transition = "none";
         } else if (dy > 30) {
             swiping = false;
-            div.classList.remove("swiping");
-            swipeIndicator.style.transform = "translateX(0)";
-            swipeIndicator.style.opacity = "0";
+            div.style.transform = "";
+            div.style.transition = "";
         }
     }, { passive: true });
 
     div.addEventListener("touchend", () => {
         clearTimeout(longPressTimer);
         if (swiping && swipeDx > 50) {
-            div.classList.remove("swiping");
-            swipeIndicator.style.transform = "translateX(0)";
-            swipeIndicator.style.opacity = "0";
-            if (data.id) setReplyTo(data);
+            div.style.transform = "";
+            div.style.transition = "transform 0.2s ease";
+            setTimeout(() => { div.style.transition = ""; }, 200);
+            if (data.id) {
+                setReplyTo(data);
+                // Focus the input
+                const inp = document.getElementById("input") || document.getElementById("vinput") || document.getElementById("hinput");
+                if (inp) setTimeout(() => inp.focus(), 100);
+            }
+        } else {
+            div.style.transform = "";
+            div.style.transition = "";
         }
         swiping = false;
         swipeDx = 0;
@@ -786,7 +790,6 @@ function appendMessage(data, container) {
         if (data.id) setReplyTo(data);
     });
     div.appendChild(replyBtn);
-    div.appendChild(swipeIndicator);
 
     container.appendChild(div);
 
