@@ -875,22 +875,22 @@ body.light #vform #vemojiBtn, body.light #vform #vgifBtn, body.light #vform #vim
 .content-area.hyperbeam-open .video-panel { display: none; }
 .content-area.hyperbeam-open .hyperbeam-panel { display: flex; flex: 1; }
 .hyperbeam-url-bar {
-    display: flex; gap: 8px; padding: 10px 12px;
+    display: flex; gap: 6px; padding: 4px 10px;
     flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,0.08);
     position: relative; z-index: 10;
     background: rgba(10,10,20,0.98);
 }
 .hyperbeam-url-bar input {
-    flex: 1; height: 40px; padding: 0 12px;
-    border-radius: 10px; border: none; outline: none;
-    font-size: 14px; background: rgba(255,255,255,0.1); color: white;
+    flex: 1; height: 32px; padding: 0 10px;
+    border-radius: 8px; border: none; outline: none;
+    font-size: 13px; background: rgba(255,255,255,0.1); color: white;
 }
 body.light .hyperbeam-url-bar input { background: rgba(0,0,0,0.08); color: #111; }
 .hyperbeam-url-bar input::placeholder { color: rgba(255,255,255,0.4); }
 body.light .hyperbeam-url-bar input::placeholder { color: rgba(0,0,0,0.35); }
 .hyperbeam-url-bar .hb-btn {
-    height: 40px; padding: 0 16px;
-    border-radius: 10px; font-size: 13px; white-space: nowrap;
+    height: 32px; padding: 0 12px;
+    border-radius: 8px; font-size: 12px; white-space: nowrap;
 }
 
 .hb-btn {
@@ -1053,12 +1053,12 @@ body.light .hb-url-input::placeholder { color: rgba(0,0,0,0.35); }
 
 /* HYPERBEAM BOTTOM CHAT SECTION */
 .hyperbeam-bottom {
-    flex: 0 0 auto; height: 48px;
+    flex: 0 0 auto; height: 32px;
     display: flex; flex-direction: column;
     border-top: 1px solid rgba(255,255,255,0.1);
     background: rgba(0,0,0,0.4);
     position: relative;
-    min-height: 48px;
+    min-height: 32px;
 }
 .hyperbeam-bottom.hidden { display: none; }
 .hyperbeam-bottom-resize {
