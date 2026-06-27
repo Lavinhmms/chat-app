@@ -675,6 +675,39 @@ io.on("connection", (socket) => {
         socket.emit("hyperbeam:session", { embedUrl: room.hyperbeam.embedUrl });
     });
 
+    socket.on("hyperbeam:navigate", ({ url }) => {
+        const room = getRoom(socket);
+        if (!room || !room.hyperbeam || !url) return;
+        const hbReq = https.request({
+            hostname: "engine.hyperbeam.com",
+            path: "/v0/vm/" + room.hyperbeam.sessionId + "/navigate",
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + HB_API_KEY,
+                "Content-Type": "application/json"
+            }
+        }, (hbRes) => {
+            let data = "";
+            hbRes.on("data", chunk => data += chunk);
+            hbRes.on("end", () => {
+                try {
+                    const result = JSON.parse(data);
+                    if (result.success) {
+                        io.to(socket.roomId).emit("hyperbeam:status", "Navigated to " + url);
+                    } else {
+                        io.to(socket.roomId).emit("hyperbeam:error", result.message || "Navigation failed");
+                    }
+                } catch(e) {
+                    io.to(socket.roomId).emit("hyperbeam:error", "Navigation failed");
+                }
+            });
+        });
+        hbReq.on("error", () => io.to(socket.roomId).emit("hyperbeam:error", "Network error"));
+        hbReq.setTimeout(10000, () => { hbReq.destroy(); });
+        hbReq.write(JSON.stringify({ url }));
+        hbReq.end();
+    });
+
     // ── WebRTC signaling ──────────────────────────
     socket.on("call:join", (username) => {
         if (!rateLimit(socket)) return;

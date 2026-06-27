@@ -2432,6 +2432,21 @@ startHyperbeamBtn.addEventListener("click", () => {
     }
 });
 
+hyperbeamUrlInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        if (hyperbeamSessionActive) {
+            const url = hyperbeamUrlInput.value.trim();
+            if (url) {
+                socket.emit("hyperbeam:navigate", { url });
+                hyperbeamStatusText.textContent = "⏳ Navigating...";
+            }
+        } else {
+            startHyperbeamBtn.click();
+        }
+    }
+});
+
 // Socket events
 socket.on("hyperbeam:session", ({ embedUrl }) => {
     hyperbeamSessionActive = true;
@@ -2479,6 +2494,10 @@ socket.on("hyperbeam:error", (msg) => {
         startHyperbeamBtn.textContent = "▷ Start";
         startHyperbeamBtn.className = "hb-btn hb-start";
     }
+});
+
+socket.on("hyperbeam:status", (msg) => {
+    hyperbeamStatusText.textContent = msg;
 });
 
 // ── Hyperbeam Fullscreen ─────────────────────────
