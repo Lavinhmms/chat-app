@@ -2426,7 +2426,8 @@ startHyperbeamBtn.addEventListener("click", () => {
             socket.emit("hyperbeam:stop");
         }
     } else {
-        socket.emit("hyperbeam:start");
+        const url = hyperbeamUrlInput.value.trim() || undefined;
+        socket.emit("hyperbeam:start", { url });
         hyperbeamStatusText.textContent = "⏳ Starting session...";
     }
 });

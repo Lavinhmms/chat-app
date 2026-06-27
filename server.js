@@ -615,13 +615,14 @@ io.on("connection", (socket) => {
     });
 
     // ── Hyperbeam co-browsing ─────────────────────
-    socket.on("hyperbeam:start", () => {
+    socket.on("hyperbeam:start", ({ url } = {}) => {
         const room = getRoom(socket);
         if (!room) return;
         if (room.hyperbeam) {
             io.to(socket.roomId).emit("hyperbeam:session", { embedUrl: room.hyperbeam.embedUrl });
             return;
         }
+        const body = url ? JSON.stringify({ url }) : "{}";
         const hbReq = https.request({
             hostname: "engine.hyperbeam.com",
             path: "/v0/vm",
@@ -657,7 +658,7 @@ io.on("connection", (socket) => {
         });
         hbReq.on("error", () => io.to(socket.roomId).emit("hyperbeam:error", "Network error"));
         hbReq.setTimeout(15000, () => { hbReq.destroy(); io.to(socket.roomId).emit("hyperbeam:error", "Timeout"); });
-        hbReq.write("{}");
+        hbReq.write(body);
         hbReq.end();
     });
 
