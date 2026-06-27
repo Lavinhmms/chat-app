@@ -2465,7 +2465,10 @@ socket.on("hyperbeam:session", ({ embedUrl }) => {
     hyperbeamFsBtn.classList.remove("hidden");
     hbZoomControls.classList.remove("hidden");
     if (hbPanMode) hbExitPanMode();
-    hbResetZoom();
+    hbZoom = 0.75;
+    hbPanX = 0;
+    hbPanY = 0;
+    hbApplyZoom();
 });
 
 socket.on("hyperbeam:ended", () => {
