@@ -765,31 +765,6 @@ function appendMessage(data, container) {
         swipeDx = 0;
     });
 
-    // Small hover trigger for desktop (subtle ⋯)
-    const hoverTrigger = document.createElement("button");
-    hoverTrigger.className = "reaction-trigger";
-    hoverTrigger.textContent = "⋯";
-    hoverTrigger.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const existingBar = document.getElementById("global-reaction-bar");
-        if (existingBar && existingBar.style.visibility === "visible") {
-            closeReactionUI();
-        } else {
-            showReactionBarAt(data.id, div);
-        }
-    });
-    div.appendChild(hoverTrigger);
-
-    // Desktop reply button
-    const replyBtn = document.createElement("button");
-    replyBtn.className = "reply-trigger";
-    replyBtn.textContent = "↩";
-    replyBtn.title = "Reply";
-    replyBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (data.id) setReplyTo(data);
-    });
-    div.appendChild(replyBtn);
 
     container.appendChild(div);
 

@@ -1080,12 +1080,12 @@ body.light .hb-url-input::placeholder { color: rgba(0,0,0,0.35); }
 
 /* HYPERBEAM BOTTOM CHAT SECTION */
 .hyperbeam-bottom {
-    flex: 0 0 auto; height: 32px;
+    flex: 0 0 auto; height: 50px;
     display: flex; flex-direction: column;
     border-top: 1px solid rgba(255,255,255,0.1);
     background: rgba(0,0,0,0.4);
     position: relative;
-    min-height: 32px;
+    min-height: 50px;
 }
 .hyperbeam-bottom.hidden { display: none; }
 .hyperbeam-bottom-resize {
