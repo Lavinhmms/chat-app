@@ -599,14 +599,6 @@ body.light #emojiBtn { background: rgba(0,0,0,0.08); }
     display: flex; flex: 1;
 }
 
-/* Theater Mode */
-.video-panel.theater-mode .video-bottom { height: 40px; min-height: 40px; }
-.video-panel.theater-mode .video-queue { max-height: 60px; }
-.video-panel.theater-mode .video-url-bar { padding: 6px 12px; }
-.video-panel.theater-mode .video-url-bar input { height: 32px; font-size: 13px; }
-.video-panel.theater-mode #loadVideoBtn { height: 32px; padding: 0 12px; font-size: 12px; }
-#theaterModeBtn.active { background: rgba(56,189,248,0.25); color: #38bdf8; }
-
 /* Video Fullscreen */
 #videoFullscreenBtn.active { background: rgba(56,189,248,0.25); color: #38bdf8; }
 .video-wrapper:-webkit-full-screen { width: 100vw; height: 100vh; background: #000; }

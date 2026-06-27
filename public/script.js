@@ -1619,16 +1619,6 @@ shuffleBtn.addEventListener("click", () => {
     socket.emit("video:play-random-from-queue");
 });
 
-// ── Theater Mode ──────────────────────────────────
-const theaterModeBtn = document.getElementById("theaterModeBtn");
-let theaterMode = false;
-theaterModeBtn.addEventListener("click", () => {
-    theaterMode = !theaterMode;
-    videoPanel.classList.toggle("theater-mode", theaterMode);
-    theaterModeBtn.classList.toggle("active", theaterMode);
-    theaterModeBtn.title = theaterMode ? "Exit theater mode (T)" : "Theater mode (T)";
-});
-
 // ── Video Fullscreen ──────────────────────────────
 const videoFullscreenBtn = document.getElementById("videoFullscreenBtn");
 const videoFsClose = document.getElementById("videoFsClose");
@@ -1668,9 +1658,6 @@ function onVideoFsChange() {
     videoFsClose.classList.toggle("hidden", !isFs);
     videoFullscreenBtn.classList.toggle("active", isFs);
     videoFullscreenBtn.title = isFs ? "Exit fullscreen (F)" : "Fullscreen (F)";
-    if (!isFs && theaterMode) {
-        videoPanel.classList.add("theater-mode");
-    }
 }
 document.addEventListener("fullscreenchange", onVideoFsChange);
 document.addEventListener("webkitfullscreenchange", onVideoFsChange);
@@ -2613,9 +2600,6 @@ document.addEventListener("keydown", (e) => {
         } else if (!videoPanel.classList.contains("hidden")) {
             toggleVideoFullscreen();
         }
-    }
-    if ((e.key === "t" || e.key === "T") && !videoPanel.classList.contains("hidden")) {
-        theaterModeBtn.click();
     }
 });
 
