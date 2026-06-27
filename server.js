@@ -617,7 +617,7 @@ io.on("connection", (socket) => {
     // ── Hyperbeam co-browsing ─────────────────────
     socket.on("hyperbeam:start", () => {
         const room = getRoom(socket);
-        if (!room || !room.admins.has(socket.id)) return;
+        if (!room) return;
         if (room.hyperbeam) {
             io.to(socket.roomId).emit("hyperbeam:session", { embedUrl: room.hyperbeam.embedUrl });
             return;
@@ -663,7 +663,7 @@ io.on("connection", (socket) => {
 
     socket.on("hyperbeam:stop", () => {
         const room = getRoom(socket);
-        if (!room || !room.admins.has(socket.id) || !room.hyperbeam) return;
+        if (!room || !room.hyperbeam) return;
         endHyperbeamSession(room);
         io.to(socket.roomId).emit("hyperbeam:ended");
     });
