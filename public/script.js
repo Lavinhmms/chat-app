@@ -2465,9 +2465,8 @@ socket.on("hyperbeam:session", ({ embedUrl }) => {
     hyperbeamFsBtn.classList.remove("hidden");
     hbZoomControls.classList.remove("hidden");
     if (hbPanMode) hbExitPanMode();
-    hbZoom = 0.75;
-    hbPanX = 0;
-    hbPanY = 0;
+    hbResetZoom();
+    hbScaleY = 1.3;
     hbApplyZoom();
 });
 
@@ -2567,6 +2566,7 @@ const hbZoomValue = document.getElementById("hbZoomValue");
 const hbPanOverlay = document.getElementById("hbPanOverlay");
 const hbPanBtn = document.getElementById("hbPanBtn");
 let hbZoom = 1;
+let hbScaleY = 1;
 let hbPanX = 0;
 let hbPanY = 0;
 let hbPanMode = false;
@@ -2577,10 +2577,10 @@ let hbDragStartPanY = 0;
 let hbIsDragging = false;
 
 function hbApplyZoom() {
-    if (hbZoom === 1 && hbPanX === 0 && hbPanY === 0) {
+    if (hbZoom === 1 && hbScaleY === 1 && hbPanX === 0 && hbPanY === 0) {
         hyperbeamContainer.style.transform = "";
     } else {
-        hyperbeamContainer.style.transform = `scale(${hbZoom}) translate(${hbPanX}px, ${hbPanY}px)`;
+        hyperbeamContainer.style.transform = `scaleX(${hbZoom}) scaleY(${hbZoom * hbScaleY}) translate(${hbPanX}px, ${hbPanY}px)`;
         hyperbeamContainer.style.transformOrigin = "0 0";
     }
     hbZoomValue.textContent = Math.round(hbZoom * 10) / 10 + "×";
@@ -2590,6 +2590,7 @@ function hbApplyZoom() {
 
 function hbResetZoom() {
     hbZoom = 1;
+    hbScaleY = 1;
     hbPanX = 0;
     hbPanY = 0;
     hbApplyZoom();
