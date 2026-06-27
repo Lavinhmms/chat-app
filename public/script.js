@@ -1633,6 +1633,7 @@ function toggleVideoFullscreen() {
 }
 
 function enterVideoFullscreen() {
+    try { if (screen.orientation?.lock) screen.orientation.lock("landscape-primary"); } catch(e) {}
     const el = videoWrapper;
     const fn = el.requestFullscreen || el.webkitRequestFullscreen;
     if (fn) {
@@ -1640,7 +1641,6 @@ function enterVideoFullscreen() {
         videoFsClose.classList.remove("hidden");
         videoFullscreenBtn.classList.add("active");
         videoFullscreenBtn.title = "Exit fullscreen (F)";
-        try { if (screen.orientation?.lock) screen.orientation.lock("landscape"); } catch(e) {}
     }
 }
 
@@ -1659,7 +1659,9 @@ function onVideoFsChange() {
     videoFsClose.classList.toggle("hidden", !isFs);
     videoFullscreenBtn.classList.toggle("active", isFs);
     videoFullscreenBtn.title = isFs ? "Exit fullscreen (F)" : "Fullscreen (F)";
-    if (!isFs) {
+    if (isFs) {
+        try { if (screen.orientation?.lock) screen.orientation.lock("landscape-primary"); } catch(e) {}
+    } else {
         try { if (screen.orientation?.unlock) screen.orientation.unlock(); } catch(e) {}
     }
 }

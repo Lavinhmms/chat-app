@@ -601,15 +601,18 @@ body.light #emojiBtn { background: rgba(0,0,0,0.08); }
 
 /* Video Fullscreen */
 #videoFullscreenBtn.active { background: rgba(56,189,248,0.25); color: #38bdf8; }
-.video-wrapper:-webkit-full-screen { width: 100vw; height: 100vh; background: #000; }
-.video-wrapper:-moz-full-screen { width: 100vw; height: 100vh; background: #000; }
-.video-wrapper:fullscreen { width: 100vw; height: 100vh; background: #000; }
+.video-wrapper:-webkit-full-screen { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; padding: 0; background: #000; }
+.video-wrapper:-moz-full-screen { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; padding: 0; background: #000; }
+.video-wrapper:fullscreen { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; padding: 0; background: #000; }
 .video-wrapper:-webkit-full-screen #ytPlayer { width: 100%; height: 100%; }
 .video-wrapper:-moz-full-screen #ytPlayer { width: 100%; height: 100%; }
 .video-wrapper:fullscreen #ytPlayer { width: 100%; height: 100%; }
 .video-wrapper:-webkit-full-screen .video-empty { display: none; }
 .video-wrapper:-moz-full-screen .video-empty { display: none; }
 .video-wrapper:fullscreen .video-empty { display: none; }
+.video-wrapper:-webkit-full-screen .video-fs-close { display: flex; }
+.video-wrapper:-moz-full-screen .video-fs-close { display: flex; }
+.video-wrapper:fullscreen .video-fs-close { display: flex; }
 
 .video-fs-close {
     position: fixed; top: 16px; right: 16px; z-index: 2147483647;
