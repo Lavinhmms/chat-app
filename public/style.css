@@ -623,24 +623,6 @@ body.light #emojiBtn { background: rgba(0,0,0,0.08); }
 .video-fs-close:hover { background: rgba(255,255,255,0.2); }
 .video-fs-close.hidden { display: none; }
 
-.video-fs-overlay {
-    position: absolute; bottom: 16px; right: 16px; z-index: 10;
-    width: 44px; height: 44px; border-radius: 12px;
-    background: rgba(0,0,0,0.6); color: white; font-size: 22px;
-    border: none; cursor: pointer; display: flex;
-    align-items: center; justify-content: center;
-    backdrop-filter: blur(6px); opacity: 0;
-    transition: opacity 0.25s, background 0.15s;
-    pointer-events: auto;
-}
-.video-wrapper:hover .video-fs-overlay:not(.hidden),
-.video-wrapper .video-fs-overlay.show { opacity: 1; }
-.video-fs-overlay:hover { background: rgba(255,255,255,0.2); }
-.video-fs-overlay.hidden { display: none; }
-.video-wrapper:-webkit-full-screen .video-fs-overlay { display: none; }
-.video-wrapper:-moz-full-screen .video-fs-overlay { display: none; }
-.video-wrapper:fullscreen .video-fs-overlay { display: none; }
-
 .video-panel-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 16px;

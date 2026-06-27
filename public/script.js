@@ -1404,13 +1404,6 @@ function playVideoById(videoId, seekTime, paused) {
         pendingSeekTime = seekTime || 0;
         pendingPaused   = paused || false;
     }
-    videoFsOverlay.classList.remove("hidden");
-    videoFsOverlay.classList.add("show");
-    clearTimeout(videoFsOverlay._timer);
-    videoFsOverlay._timer = setTimeout(() => {
-        videoFsOverlay.classList.remove("show");
-        videoFsOverlay.classList.add("hidden");
-    }, 3000);
 }
 
 function showBlockedMessage(videoId) {
@@ -1629,7 +1622,6 @@ shuffleBtn.addEventListener("click", () => {
 // ── Video Fullscreen ──────────────────────────────
 const videoFullscreenBtn = document.getElementById("videoFullscreenBtn");
 const videoFsClose = document.getElementById("videoFsClose");
-const videoFsOverlay = document.getElementById("videoFsBtn");
 const videoWrapper = document.querySelector(".video-wrapper");
 
 function toggleVideoFullscreen() {
@@ -1660,7 +1652,6 @@ function exitVideoFullscreen() {
 }
 
 videoFullscreenBtn.addEventListener("click", toggleVideoFullscreen);
-videoFsOverlay.addEventListener("click", toggleVideoFullscreen);
 videoFsClose.addEventListener("click", exitVideoFullscreen);
 
 function onVideoFsChange() {
@@ -1674,19 +1665,6 @@ function onVideoFsChange() {
 }
 document.addEventListener("fullscreenchange", onVideoFsChange);
 document.addEventListener("webkitfullscreenchange", onVideoFsChange);
-
-// Show overlay briefly on video tap, hide after 3s
-videoWrapper.addEventListener("click", () => {
-    if (videoEmpty.classList.contains("hidden")) {
-        videoFsOverlay.classList.remove("hidden");
-        videoFsOverlay.classList.add("show");
-        clearTimeout(videoFsOverlay._timer);
-        videoFsOverlay._timer = setTimeout(() => {
-            videoFsOverlay.classList.remove("show");
-            videoFsOverlay.classList.add("hidden");
-        }, 3000);
-    }
-});
 
 // ── Socket sync ──────────────────────────────────
 socket.on("room:state", (state) => {
