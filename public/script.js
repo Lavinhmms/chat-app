@@ -1619,6 +1619,62 @@ shuffleBtn.addEventListener("click", () => {
     socket.emit("video:play-random-from-queue");
 });
 
+// ── Theater Mode ──────────────────────────────────
+const theaterModeBtn = document.getElementById("theaterModeBtn");
+let theaterMode = false;
+theaterModeBtn.addEventListener("click", () => {
+    theaterMode = !theaterMode;
+    videoPanel.classList.toggle("theater-mode", theaterMode);
+    theaterModeBtn.classList.toggle("active", theaterMode);
+    theaterModeBtn.title = theaterMode ? "Exit theater mode (T)" : "Theater mode (T)";
+});
+
+// ── Video Fullscreen ──────────────────────────────
+const videoFullscreenBtn = document.getElementById("videoFullscreenBtn");
+const videoFsClose = document.getElementById("videoFsClose");
+const videoWrapper = document.querySelector(".video-wrapper");
+
+function toggleVideoFullscreen() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+        exitVideoFullscreen();
+    } else {
+        enterVideoFullscreen();
+    }
+}
+
+function enterVideoFullscreen() {
+    const el = videoWrapper;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) {
+        fn.call(el);
+        videoFsClose.classList.remove("hidden");
+        videoFullscreenBtn.classList.add("active");
+        videoFullscreenBtn.title = "Exit fullscreen (F)";
+    }
+}
+
+function exitVideoFullscreen() {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (fn) {
+        fn.call(document);
+    }
+}
+
+videoFullscreenBtn.addEventListener("click", toggleVideoFullscreen);
+videoFsClose.addEventListener("click", exitVideoFullscreen);
+
+function onVideoFsChange() {
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    videoFsClose.classList.toggle("hidden", !isFs);
+    videoFullscreenBtn.classList.toggle("active", isFs);
+    videoFullscreenBtn.title = isFs ? "Exit fullscreen (F)" : "Fullscreen (F)";
+    if (!isFs && theaterMode) {
+        videoPanel.classList.add("theater-mode");
+    }
+}
+document.addEventListener("fullscreenchange", onVideoFsChange);
+document.addEventListener("webkitfullscreenchange", onVideoFsChange);
+
 // ── Socket sync ──────────────────────────────────
 socket.on("room:state", (state) => {
     if (!state.videoId) return;
@@ -2549,11 +2605,17 @@ document.addEventListener("webkitfullscreenchange", () => {
 });
 
 document.addEventListener("keydown", (e) => {
+    const activeTag = document.activeElement?.tagName || "";
+    if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") return;
     if (e.key === "f" || e.key === "F") {
-        const activeTag = document.activeElement?.tagName || "";
-        if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") return;
-        if (hyperbeamPanel.classList.contains("hidden")) return;
-        hyperbeamFsBtn.click();
+        if (!hyperbeamPanel.classList.contains("hidden")) {
+            hyperbeamFsBtn.click();
+        } else if (!videoPanel.classList.contains("hidden")) {
+            toggleVideoFullscreen();
+        }
+    }
+    if ((e.key === "t" || e.key === "T") && !videoPanel.classList.contains("hidden")) {
+        theaterModeBtn.click();
     }
 });
 
