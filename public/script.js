@@ -2581,7 +2581,7 @@ function hbApplyZoom() {
         hyperbeamContainer.style.transform = "";
     } else {
         hyperbeamContainer.style.transform = `scaleX(${hbZoom}) scaleY(${hbZoom * hbScaleY}) translate(${hbPanX}px, ${hbPanY}px)`;
-        hyperbeamContainer.style.transformOrigin = "0 0";
+        hyperbeamContainer.style.transformOrigin = "0 50%";
     }
     hbZoomValue.textContent = Math.round(hbZoom * 10) / 10 + "×";
     hbPanBtn.classList.toggle("hidden", hbZoom <= 1);
